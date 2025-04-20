@@ -122,7 +122,7 @@ type TextElementData struct {
 	WrappedLines        []WrappedTextLine
 }
 type LayoutElement struct {
-	ChildrenOrTextContent any
+	ChildrenOrTextContent any // Is either []intn when children or TextContent.
 	Dimensions            Dimensions
 	MinDimensions         Dimensions
 	LayoutConfig          *LayoutConfig
@@ -411,13 +411,20 @@ type ImageRenderData struct {
 type ScrollRenderData struct {
 	Horizontal, Vertical bool
 }
-
+type RectangleRenderData struct {
+	BackgroundColor Color
+	CornerRadius    CornerRadius
+}
 type BorderRenderData struct {
 	Color        Color
 	CornerRadius CornerRadius
 	Width        BorderWidth
 }
-
+type CustomRenderData struct {
+	BackgroundColor Color
+	CornerRadius    CornerRadius
+	CustomData      any
+}
 type RenderData any
 
 type ScrollContainerData struct {

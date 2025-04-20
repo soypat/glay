@@ -11,6 +11,10 @@ const (
 	rootContainerStr        = "Clay__RootContainer"
 )
 
+var (
+	defaultSharedElementConfig = SharedElementConfig{}
+)
+
 type Config struct {
 	Layout Dimensions
 }
@@ -36,7 +40,7 @@ func (context *Context) Initialize(cfg Config) error {
 	var arena _Arena
 	context.initializePersistentMemory(&arena)
 	context.initializeEphemeralMemory(&arena)
-	arrmemset(context.LayoutElementHashMap[:cap(context.LayoutElementHashMap)], -1)
+	// arrmemset(context.LayoutElementHashMap[:cap(context.LayoutElementHashMap)], -1)
 	arrmemset(context.measureTextHashMap[:cap(context.measureTextHashMap)], 0)
 	context.measureTextHashMap = context.measureTextHashMap[:1] // Reserve the 0 value to mean "no next element"
 	return nil
@@ -46,14 +50,15 @@ func (context *Context) initializePersistentMemory(arena *_Arena) {
 	maxElemCount := context.MaxElementCount
 	maxMeasureTextCacheWordCount := context.MaxMeasureTextCacheWordCount
 	alloc(arena, &context.scrollContainerDatas, 10)
-	alloc(arena, &context.layoutElementHashMapInternal, maxElemCount)
-	alloc(arena, &context.LayoutElementHashMap, maxElemCount)
+	// alloc(arena, &context.layoutElementHashMapInternal, maxElemCount)
+	// alloc(arena, &context.LayoutElementHashMap, maxElemCount)
 	alloc(arena, &context.measureTextHashMapInternal, maxElemCount)
 	alloc(arena, &context.measuredWordsFreeList, maxMeasureTextCacheWordCount)
 	alloc(arena, &context.measureTextHashMap, maxElemCount)
 	alloc(arena, &context.measuredWords, maxMeasureTextCacheWordCount)
 	alloc(arena, &context.PointerOverIDs, maxElemCount)
 	alloc(arena, &context.debugElementData, maxElemCount)
+	alloc(arena, &context.renderCommands, maxElemCount)
 }
 
 func (context *Context) initializeEphemeralMemory(arena *_Arena) {
@@ -341,6 +346,7 @@ func (context *Context) closeElement() error {
 	}
 	context.LayoutElementChildrenBuffer = context.LayoutElementChildrenBuffer[:len(context.LayoutElementChildrenBuffer)-len(children)]
 
+	// Clamp element min/max width to layout values.
 	if layoutConfig.Sizing.Width.Type != SizingPercent {
 		if layoutConfig.Sizing.Width.MinMax.Max <= 0 {
 			// Set the max size if the user didn't specify, makes calculations easier
@@ -351,6 +357,16 @@ func (context *Context) closeElement() error {
 	} else {
 		openLayoutElement.Dimensions.Width = 0
 	}
+	if layoutConfig.Sizing.Height.Type != SizingPercent {
+		if layoutConfig.Sizing.Height.MinMax.Max <= 0 {
+			layoutConfig.Sizing.Height.MinMax.Max = maxfloat
+		}
+		openLayoutElement.Dimensions.Height = layoutConfig.Sizing.ClampHeight(openLayoutElement.Dimensions.Height)
+		openLayoutElement.MinDimensions.Height = layoutConfig.Sizing.ClampHeight(openLayoutElement.MinDimensions.Height)
+	} else {
+		openLayoutElement.Dimensions.Height = 0
+	}
+
 	openLayoutElement.UpdateAspectRatioBox()
 
 	elementIsFloating := openLayoutElement.GetConfig(ElementConfigTypeFloating) != nil
@@ -360,8 +376,14 @@ func (context *Context) closeElement() error {
 	context.OpenLayoutElementStack, closingElementIndex = arrpop(context.OpenLayoutElementStack)
 	openLayoutElement = context.openLayoutElement()
 	if !elementIsFloating && len(context.OpenLayoutElementStack) > 1 {
-		context.LayoutElementChildrenBuffer = arrextend(context.LayoutElementChildrenBuffer, 1)
-		openLayoutElement.SetChildren(append(openLayoutElement.Children(), closingElementIndex))
+		children := openLayoutElement.Children()
+		if children == nil {
+			openLayoutElement.ChildrenOrTextContent = append(children, -1) // Extend with bogus data and allocate buffer.
+		} else {
+			openLayoutElement.ChildrenOrTextContent = arrextend(children, 1) // Normally extend buffer.
+		}
+
+		context.LayoutElementChildrenBuffer = arradd(context.LayoutElementChildrenBuffer, closingElementIndex)
 	}
 	return nil
 }
@@ -461,7 +483,7 @@ func (context *Context) calculateFinalLayout() error {
 		children := currentElement.Children()
 		if !context.TreeNodeVisited[len(dfsBuffer)-1] {
 			context.TreeNodeVisited[len(dfsBuffer)-1] = true
-			if currentElement.GetConfig(ElementConfigTypeText) != nil || len(children) > 0 {
+			if currentElement.GetConfig(ElementConfigTypeText) != nil || len(children) == 0 {
 				// If the element has no children or is the container for a text element, don't bother inspecting it
 				dfsBuffer = dfsBuffer[:len(dfsBuffer)-1]
 				continue
@@ -645,7 +667,7 @@ func (context *Context) calculateFinalLayout() error {
 				hashMapItem := context.HashMapItem(currentElement.ID)
 				if hashMapItem != nil {
 					hashMapItem.BoundingBox = currentElementBoundingBox
-					if hashMapItem.IDAlias != 0 {
+					if hashMapItem.IDAlias != 0 { // For non-rootcontainer element.
 						hashMapItemAlias := context.HashMapItem(hashMapItem.IDAlias)
 						if hashMapItemAlias != nil {
 							hashMapItemAlias.BoundingBox = currentElementBoundingBox
@@ -696,7 +718,7 @@ func (context *Context) calculateFinalLayout() error {
 						renderCommand.RenderData = nil // TODO
 					case ElementConfigTypeImage:
 						renderCommand.CommandType = RenderCommandTypeImage
-						renderCommand.RenderData = nil // TODO
+						renderCommand.RenderData = nil // TODO.
 					case ElementConfigTypeText:
 						if !shouldRender {
 							break
@@ -705,7 +727,11 @@ func (context *Context) calculateFinalLayout() error {
 						// TODO bunch of stuff here.
 					case ElementConfigTypeCustom:
 						renderCommand.CommandType = RenderCommandTypeCustom
-						renderCommand.RenderData = nil // TODO
+						renderCommand.RenderData = CustomRenderData{
+							BackgroundColor: sharedConfig.BackgroundColor,
+							CornerRadius:    sharedConfig.CornerRadius,
+							// CustomData: elementConfig.Config, // TODO.
+						}
 					default:
 						println("unknown command?")
 					}
@@ -721,6 +747,10 @@ func (context *Context) calculateFinalLayout() error {
 				if emitRectangle {
 					context.addRenderCommand(RenderCommand{
 						BoundingBox: currentElementBoundingBox,
+						RenderData: RectangleRenderData{
+							BackgroundColor: sharedConfig.BackgroundColor,
+							CornerRadius:    sharedConfig.CornerRadius,
+						},
 						// TODO: Render Data
 						UserData:    sharedConfig.UserData,
 						ID:          currentElement.ID,
@@ -731,12 +761,12 @@ func (context *Context) calculateFinalLayout() error {
 
 				// Setup initial on-axis alignment.
 				textconfig, _ := currentElementTreeNode.layoutElement.GetConfig(ElementConfigTypeText).(*TextElementConfig)
-				if textconfig != nil {
+				if textconfig == nil {
 					var contentSize Dimensions
 					if layoutConfig.LayoutDirection == LeftToRight {
 						for i := intn(0); i < arrlen(children); i++ {
-							childElement := context.LayoutElements[children[i]]
-							contentSize.Width += childElement.Dimensions.Height
+							childElement := &context.LayoutElements[children[i]]
+							contentSize.Width += childElement.Dimensions.Width
 							contentSize.Height = max(contentSize.Height, childElement.Dimensions.Height)
 						}
 						contentSize.Width += max(floatn(len(children)-1), 0) * floatn(layoutConfig.ChildGap)
@@ -858,10 +888,11 @@ func (context *Context) calculateFinalLayout() error {
 
 			// Add children to the DFS buffer.
 			textConfig := currentElement.GetConfig(ElementConfigTypeText)
-			if textConfig != nil {
+			if textConfig == nil {
 				dfsBuffer = dfsBuffer[:len(dfsBuffer)+len(children)]
 				for i := intn(0); i < arrlen(children); i++ {
 					childElement := &context.LayoutElements[children[i]]
+					// Alignment along non-layout axis.
 					if layoutConfig.LayoutDirection == LeftToRight {
 						currentElementTreeNode.NextChildOffset.Y = floatn(currentElement.LayoutConfig.Padding.Top)
 						whiteSpaceAroundChild := currentElement.Dimensions.Height - floatn(layoutConfig.Padding.Vertical()) - childElement.Dimensions.Height
@@ -941,6 +972,7 @@ func (context *Context) sizeContainersAlongAxis(xaxis bool) error {
 		bfs = arradd(bfs, root.LayoutElementIndex)
 
 		if floatingCfg, _ := rootElement.GetConfig(ElementConfigTypeFloating).(*FloatingElementConfig); floatingCfg != nil {
+			// Size floating containers to their parents.
 			parentItem := context.HashMapItem(floatingCfg.ParentID)
 			if parentItem != nil && !parentItem.isdefault() {
 				parentLayoutElement := parentItem.LayoutElement
@@ -972,16 +1004,15 @@ func (context *Context) sizeContainersAlongAxis(xaxis bool) error {
 				childElement := &context.LayoutElements[childElementIndex]
 				childSizing := childElement.LayoutConfig.Sizing.SizingAxis(xaxis)
 				childSize := childElement.Dimensions.SizeAxis(xaxis)
-				textcfg, ok := childElement.GetConfig(ElementConfigTypeText).(*TextElementConfig)
-				if !ok && len(childElement.Children()) > 0 {
+				textcfg, hasTxt := childElement.GetConfig(ElementConfigTypeText).(*TextElementConfig)
+				if !hasTxt && len(childElement.Children()) > 0 {
 					// Child is not text element with 1+ children.
 					bfs = arradd(bfs, childElementIndex)
 				}
-				// Wrapped text lines list has overflowed, just render out the line
-				if childSizing.Type != SizingPercent && childSizing.Type != SizingFixed &&
+				if childSizing.Type != SizingPercent &&
+					childSizing.Type != SizingFixed &&
 					(textcfg == nil || textcfg.WrapMode == TextWrapWords) &&
-					(xaxis || childElement.GetConfig(ElementConfigTypeImage) != nil) {
-					// TODO: too many loops.
+					(xaxis || childElement.GetConfig(ElementConfigTypeImage) == nil) {
 					resizableContainerBuffer = arradd(resizableContainerBuffer, childElementIndex)
 				}
 
@@ -1021,13 +1052,15 @@ func (context *Context) sizeContainersAlongAxis(xaxis bool) error {
 				sizeToDistribute := parentSize - parentPadding - innerContentSize
 				// The content is too large, compress children as much as possible.
 				if sizeToDistribute < 0 {
-					// If the parent can scroll in the axis direction in this direction, don't compress children, just leave them alone.
-					scrollCfg, ok := parent.GetConfig(ElementConfigTypeScroll).(*ScrollElementConfig)
-					if ok {
+					scrollCfg, hasScrollConfig := parent.GetConfig(ElementConfigTypeScroll).(*ScrollElementConfig)
+					if hasScrollConfig {
 						if (xaxis && scrollCfg.Horizontal) || (!xaxis && scrollCfg.Vertical) {
+							// If the parent can scroll in the axis direction in this direction, don't compress children, just leave them alone.
 							continue
 						}
 					}
+
+					// Scrolling containers preferentially compress before others.
 					for sizeToDistribute < -eps && arrlen(resizableContainerBuffer) > 0 {
 						var largest, secondLargest, widthToAdd floatn = 0, 0, sizeToDistribute
 						for childIndex := intn(0); childIndex < arrlen(resizableContainerBuffer); childIndex++ {
@@ -1063,6 +1096,51 @@ func (context *Context) sizeContainersAlongAxis(xaxis bool) error {
 							}
 						}
 					}
+				} else if sizeToDistribute > 0 && growContainerCount > 0 {
+					// Content is too small, allow SizingGrow containers to expand.
+					for childIndex := intn(0); childIndex < arrlen(resizableContainerBuffer); childIndex++ {
+						child := &context.LayoutElements[resizableContainerBuffer[childIndex]]
+						childSizing := child.LayoutConfig.Sizing.SizingAxis(xaxis).Type
+						if childSizing != SizingGrow {
+							resizableContainerBuffer = arrremoveswapback(resizableContainerBuffer, childIndex)
+							childIndex--
+						}
+					}
+					for sizeToDistribute > eps && len(resizableContainerBuffer) > 0 {
+						smallest := maxfloat
+						secondSmallest := maxfloat
+						widthToAdd := sizeToDistribute
+						for childIndex := intn(0); childIndex < arrlen(resizableContainerBuffer); childIndex++ {
+							child := &context.LayoutElements[resizableContainerBuffer[childIndex]]
+							childSize := child.Dimensions.SizeAxis(xaxis)
+							if floatequal(childSize, smallest) {
+								continue
+							} else if childSize < smallest {
+								secondSmallest = smallest
+								smallest = childSize
+							}
+							if childSize > smallest {
+								secondSmallest = min(secondSmallest, childSize)
+								widthToAdd = secondSmallest - smallest
+							}
+						}
+						widthToAdd = min(widthToAdd, sizeToDistribute/floatn(len(resizableContainerBuffer)))
+						for childIndex := intn(0); childIndex < arrlen(resizableContainerBuffer); childIndex++ {
+							child := &context.LayoutElements[resizableContainerBuffer[childIndex]]
+							childSize := child.Dimensions.SizeAxisPtr(xaxis)
+							maxSize := child.LayoutConfig.Sizing.SizingAxis(xaxis).MinMax.Max
+							previousWidth := *childSize
+							if floatequal(*childSize, smallest) {
+								*childSize += widthToAdd
+								if *childSize >= maxSize {
+									*childSize = maxSize
+									resizableContainerBuffer = arrremoveswapback(resizableContainerBuffer, childIndex)
+									childIndex--
+								}
+								sizeToDistribute -= *childSize - previousWidth
+							}
+						}
+					}
 				}
 
 			} else {
@@ -1083,8 +1161,8 @@ func (context *Context) sizeContainersAlongAxis(xaxis bool) error {
 						}
 					}
 					if childSizing.Type == SizingFit {
-						*childSize = max(childSizing.MinMax.Min, min(childSizing.MinMax.Max, maxSize))
-					} else if childSizing.Type == SizingFit {
+						*childSize = max(childSizing.MinMax.Min, min(*childSize, maxSize))
+					} else if childSizing.Type == SizingGrow {
 						*childSize = min(maxSize, childSizing.MinMax.Max)
 					}
 				}
@@ -1135,7 +1213,7 @@ func (le *LayoutElement) GetConfig(etype ElementConfigType) any {
 func (le *LayoutElement) GetSharedConfig() (*SharedElementConfig, bool) {
 	cfg, ok := le.GetConfig(ElementConfigTypeShared).(*SharedElementConfig)
 	if !ok {
-		return &SharedElementConfig{}, false
+		return &defaultSharedElementConfig, false
 	}
 	return cfg, true
 }
@@ -1164,21 +1242,25 @@ func (context *Context) HashMapItem(id uintn) *LayoutElementHashMapItem {
 	item, ok := context.GoHash[id]
 	if !ok {
 		println("item not found in hash map")
-		return &LayoutElementHashMapItem{}
+		return nil
 	}
 	return item
 }
 
-func (context *Context) AddHashMapItem(elementID ElementID, layoutElem *LayoutElement, id uintn) *LayoutElementHashMapItem {
-	v, existing := context.GoHash[id]
+func (context *Context) AddHashMapItem(elementID ElementID, layoutElem *LayoutElement, idAlias uintn) *LayoutElementHashMapItem {
+	id := elementID.ID
+	_, existing := context.GoHash[id]
 	if existing {
 		println("an element with this ID already existed")
 	}
-	context.GoHash[id] = &LayoutElementHashMapItem{
+	v := &LayoutElementHashMapItem{
 		Generation:    context.Generation + 1,
 		ElementID:     elementID,
 		LayoutElement: layoutElem,
+		IDAlias:       idAlias,
+		NextIndex:     -1,
 	}
+	context.GoHash[id] = v
 	return v
 }
 

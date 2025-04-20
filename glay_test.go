@@ -35,7 +35,9 @@ func TestAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = cmds
+	if len(cmds) != 1 {
+		t.Errorf("expected 1 command, got %d", len(cmds))
+	}
 }
 
 func (context *Context) Clay(decl ElementDeclaration, declChildren ...func() error) (err error) {
