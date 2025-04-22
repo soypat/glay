@@ -702,7 +702,7 @@ func (context *Context) calculateFinalLayout() error {
 					emitRectangle = false
 				}
 				for elementConfigIndex := intn(0); elementConfigIndex < arrlen(currentElement.ElementConfigs); elementConfigIndex++ {
-					elementConfig := currentElement.ElementConfigs[sortedConfigIndexes[elementConfigIndex]]
+					elementConfig := &currentElement.ElementConfigs[sortedConfigIndexes[elementConfigIndex]]
 					renderCommand := RenderCommand{
 						BoundingBox: currentElementBoundingBox,
 						UserData:    sharedConfig.UserData,
@@ -715,10 +715,18 @@ func (context *Context) calculateFinalLayout() error {
 						shouldRender = false
 					case ElementConfigTypeScroll:
 						renderCommand.CommandType = RenderCommandTypeScissorStart
-						renderCommand.RenderData = nil // TODO
+						renderCommand.RenderData = &ScrollRenderData{
+							Horizontal: elementConfig.Config.(*ScrollElementConfig).Horizontal,
+							Vertical:   elementConfig.Config.(*ScrollElementConfig).Vertical,
+						}
 					case ElementConfigTypeImage:
 						renderCommand.CommandType = RenderCommandTypeImage
-						renderCommand.RenderData = nil // TODO.
+						renderCommand.RenderData = &ImageRenderData{
+							BackgroundColor:  sharedConfig.BackgroundColor,
+							CornerRadius:     sharedConfig.CornerRadius,
+							SourceDimensions: elementConfig.Config.(*ImageElementConfig).SourceDimensions,
+							ImageData:        elementConfig.Config.(*ImageElementConfig).ImageData,
+						}
 					case ElementConfigTypeText:
 						if !shouldRender {
 							break
@@ -730,6 +738,7 @@ func (context *Context) calculateFinalLayout() error {
 						renderCommand.RenderData = CustomRenderData{
 							BackgroundColor: sharedConfig.BackgroundColor,
 							CornerRadius:    sharedConfig.CornerRadius,
+							CustomData:      elementConfig.Config,
 							// CustomData: elementConfig.Config, // TODO.
 						}
 					default:
