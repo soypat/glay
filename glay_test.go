@@ -3,7 +3,7 @@ package glay
 import "testing"
 
 func TestAPI(t *testing.T) {
-	context := new(Context)
+	var context Context
 	err := context.Initialize(Config{
 		Layout: Dimensions{Width: 100, Height: 100},
 	})
@@ -38,22 +38,4 @@ func TestAPI(t *testing.T) {
 	if len(cmds) != 1 {
 		t.Errorf("expected 1 command, got %d", len(cmds))
 	}
-}
-
-func (context *Context) Clay(decl ElementDeclaration, declChildren ...func() error) (err error) {
-	err = context.openElement()
-	if err != nil {
-		return err
-	}
-	err = context.configureOpenElement(decl)
-	if err != nil {
-		return err
-	}
-	for _, decl := range declChildren {
-		err = decl()
-		if err != nil {
-			return err
-		}
-	}
-	return context.closeElement()
 }

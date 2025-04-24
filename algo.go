@@ -46,6 +46,24 @@ func (context *Context) Initialize(cfg Config) error {
 	return nil
 }
 
+func (context *Context) Clay(decl ElementDeclaration, declChildren ...func() error) (err error) {
+	err = context.openElement()
+	if err != nil {
+		return err
+	}
+	err = context.configureOpenElement(decl)
+	if err != nil {
+		return err
+	}
+	for _, decl := range declChildren {
+		err = decl()
+		if err != nil {
+			return err
+		}
+	}
+	return context.closeElement()
+}
+
 func (context *Context) initializePersistentMemory(arena *_Arena) {
 	maxElemCount := context.MaxElementCount
 	maxMeasureTextCacheWordCount := context.MaxMeasureTextCacheWordCount
