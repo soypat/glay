@@ -6,15 +6,11 @@
 [![sourcegraph](https://sourcegraph.com/github.com/soypat/glay/-/badge.svg)](https://sourcegraph.com/github.com/soypat/glay?badge)
 
 
-Go module template with instructions on how to make your code importable and setting up codecov CI.
-
-How to install package with newer versions of Go (+1.16):
-```sh
-go mod download github.com/soypat/glay@latest
-```
+A Go line-by-line port of the fascinating [Clay UI](https://github.com/nicbarker/clay) library for science.
 
 
 ## Basic usage example
+This library is a WIP. There may (read as "certainly may") be bugs.
 
 ```go
     var context Context
