@@ -1268,7 +1268,9 @@ func (context *Context) attachID(id ElementID) {
 func (context *Context) HashMapItem(id uintn) *LayoutElementHashMapItem {
 	item, ok := context.GoHash[id]
 	if !ok {
-		println("item not found in hash map")
+		if id != 0 {
+			println("item not found in hash map")
+		}
 		return nil
 	}
 	return item
