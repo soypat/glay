@@ -1,5 +1,9 @@
 package glay
 
+//go:generate stringer -linecomment -output=stringers.go -type=ElementConfigType,LayoutDirection,LayoutAlignmentX,LayoutAlignmentY,SizingType,TextElementConfigWrapMode,TextAlignment,FloatingAttachPointType,MousePointerCaptureMode,FloatingAttachToElement,RenderCommandType,Error
+
+// Internal clay types to better match the source and also
+// allow easily switching between a 32-bit implementation or 64-bit.
 type (
 	uintn    = uint32
 	intn     = int32
@@ -51,8 +55,6 @@ type Context struct {
 	WrappedTextLines                   []WrappedTextLine
 	LayoutElementTreeNodes1            []layoutElementTreeNode
 	LayoutElementTreeRoots             []layoutElementTreeRoot
-	layoutElementHashMapInternal       []LayoutElementHashMapItem
-	LayoutElementHashMap               []intn
 	measureTextHashMapInternal         []measureTextCacheItem
 	MeasureTextHashMapInternalFreelist []intn
 	measureTextHashMap                 []intn
@@ -491,8 +493,16 @@ type ElementDeclaration struct {
 type Error uint8
 
 const (
-	ErrTextMeasurementFunctionNotProvided Error = iota // a text measurement function wasn't provided using Clay_SetMeasureTextFunction(), or the provided function was null.
+	ErrTextMeasurementFunctionNotProvided Error = iota // a text measurement function wasn't provided using Clay_SetMeasureTextFunction(), or the provided function was null
+	ErrPercentageOver1                                 // an element was configured with CLAY_SIZING_PERCENT, but the provided percentage value was over 1.0. Clay expects a value between 0 and 1, i.e. 20% is 0.2
+	ErrFloatingContainerParentNotFound                 // a floating element was declared with a parentId, but no element with that ID was found
+	ErrElementsCapacityExceeded                        // Clay ran out of capacity while attempting to create render commands. This is usually caused by a large amount of wrapping text elements while close to the max element capacity. Try using Clay_SetMaxElementCount() with a higher value
+	// ErrArenaCapacityExceeded                           // Clay attempted to allocate memory in its arena, but ran out of capacity. Try increasing the capacity of the arena passed to Clay_Initialize()
 )
+
+func (e Error) Error() string {
+	return e.String()
+}
 
 type debugElementData struct {
 	collision, collapsed bool
