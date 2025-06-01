@@ -2,6 +2,7 @@ package glay
 
 import (
 	"errors"
+	"log/slog"
 	"math"
 )
 
@@ -47,11 +48,11 @@ func (context *Context) Initialize(cfg Config) error {
 }
 
 func (context *Context) Clay(decl ElementDeclaration, declChildren ...func() error) (err error) {
-	err = context.openElement()
+	err = context.OpenElement()
 	if err != nil {
 		return err
 	}
-	err = context.configureOpenElement(decl)
+	err = context.ConfigureOpenElement(decl)
 	if err != nil {
 		return err
 	}
@@ -61,7 +62,7 @@ func (context *Context) Clay(decl ElementDeclaration, declChildren ...func() err
 			return err
 		}
 	}
-	return context.closeElement()
+	return context.CloseElement()
 }
 
 func (context *Context) initializePersistentMemory(arena *_Arena) {
@@ -133,8 +134,8 @@ func (context *Context) BeginLayout() error {
 	if len(context.LayoutElements) != 0 {
 		return errors.New("expect no elements on call to BeginLayout")
 	}
-	context.openElement()
-	context.configureOpenElement(ElementDeclaration{
+	context.OpenElement()
+	context.ConfigureOpenElement(ElementDeclaration{
 		ID:     ID(rootContainerStr),
 		Layout: LayoutConfig{Sizing: Sizing{Width: NewSizingAxis(SizingFixed, rootDimensions.Width), Height: NewSizingAxis(SizingFixed, rootDimensions.Height)}},
 	})
@@ -144,7 +145,7 @@ func (context *Context) BeginLayout() error {
 }
 
 func (context *Context) EndLayout() ([]RenderCommand, error) {
-	err := context.closeElement()
+	err := context.CloseElement()
 	if err != nil {
 		return nil, err
 	}
@@ -174,8 +175,8 @@ func (context *Context) warnMaxElementsExceeded() bool {
 	return false // TODO
 }
 
-// openElement creates a LayoutElement and opens it, making it the currently open layout element.
-func (context *Context) openElement() error {
+// OpenElement creates a LayoutElement and opens it, making it the currently open layout element.
+func (context *Context) OpenElement() error {
 	if arrfree(context.LayoutElements) == 0 {
 		return errors.New("max elements exceeded")
 	}
@@ -191,7 +192,7 @@ func (context *Context) openElement() error {
 	return nil
 }
 
-func (context *Context) configureOpenElement(decl ElementDeclaration) error {
+func (context *Context) ConfigureOpenElement(decl ElementDeclaration) error {
 	openLayoutElement := context.openLayoutElement()
 	openLayoutElement.LayoutConfig = context.storeLayoutConfig(decl.Layout)
 	if (decl.Layout.Sizing.Width.Type == SizingPercent && decl.Layout.Sizing.Width.Percent > 1) ||
@@ -201,10 +202,15 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 
 	openLayoutElementID := decl.ID
 	_ = openLayoutElementID
-	openLayoutElement.ElementConfigs = context.ElementConfigs[len(context.ElementConfigs):]
+
+	// FIXED: Instead of taking a slice from context.ElementConfigs, create a new slice
+	// openLayoutElement.ElementConfigs = context.ElementConfigs[len(context.ElementConfigs):]
+	openLayoutElement.ElementConfigs = make([]ElementConfig, 0, 4) // Pre-allocate space for a few configs
+
 	var sharedConfig SharedElementConfig
 	if decl.BackgroundColor.A > 0 {
 		sharedConfig.BackgroundColor = decl.BackgroundColor
+
 	}
 	if decl.CornerRadius != (CornerRadius{}) {
 		sharedConfig.CornerRadius = decl.CornerRadius
@@ -213,9 +219,13 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 		sharedConfig.UserData = decl.UserData
 	}
 	if sharedConfig != (SharedElementConfig{}) {
+
 		context.SharedElementConfigs = arradd(context.SharedElementConfigs, sharedConfig)
+
 		openLayoutElement.attachConfig(&context.SharedElementConfigs[len(context.SharedElementConfigs)-1])
+
 	}
+
 	if decl.Image.ImageData != nil {
 		context.ImageElementConfigs = arradd(context.ImageElementConfigs, decl.Image)
 		openLayoutElement.attachConfig(&context.ImageElementConfigs[len(context.ImageElementConfigs)-1])
@@ -306,7 +316,7 @@ func (context *Context) generateIDForAnonElement(openLayoutElement *LayoutElemen
 	return elementID
 }
 
-func (context *Context) closeElement() error {
+func (context *Context) CloseElement() error {
 	elementHasScrollHorizontal := false
 	elementHasScrollVertical := false
 
@@ -1280,7 +1290,7 @@ func (context *Context) AddHashMapItem(elementID ElementID, layoutElem *LayoutEl
 	id := elementID.ID
 	_, existing := context.GoHash[id]
 	if existing {
-		println("an element with this ID already existed")
+		slog.Debug("warning: overwriting element with id %d\n", id)
 	}
 	v := &LayoutElementHashMapItem{
 		Generation:    context.Generation + 1,
