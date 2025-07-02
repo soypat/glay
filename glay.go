@@ -1,5 +1,9 @@
 package glay
 
+import (
+	"log/slog"
+)
+
 //go:generate stringer -linecomment -output=stringers.go -type=ElementConfigType,LayoutDirection,LayoutAlignmentX,LayoutAlignmentY,SizingType,TextElementConfigWrapMode,TextAlignment,FloatingAttachPointType,MousePointerCaptureMode,FloatingAttachToElement,RenderCommandType,Error
 
 // Internal clay types to better match the source and also
@@ -12,7 +16,9 @@ type (
 )
 
 func ID(name string) ElementID {
-	return hashString(name, 0, 0)
+	id := hashString(name, 0, 0)
+	slog.Debug("Created ID for '%s': %d\n", name, id.ID)
+	return id
 }
 
 type Context struct {
