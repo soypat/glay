@@ -33,8 +33,6 @@ func (context *Context) Initialize(cfg Config) error {
 	}
 	if context.GoHash == nil {
 		context.GoHash = make(map[uintn]*LayoutElementHashMapItem)
-	} else {
-		clear(context.GoHash)
 	}
 	context.LayoutDimensions = cfg.Layout
 	var arena _Arena
@@ -81,6 +79,7 @@ func (context *Context) initializePersistentMemory(arena *_Arena) {
 
 func (context *Context) initializeEphemeralMemory(arena *_Arena) {
 	maxElementCount := context.MaxElementCount
+	clear(context.GoHash)
 	alloc(arena, &context.LayoutElementChildrenBuffer, maxElementCount)
 	alloc(arena, &context.LayoutElements, maxElementCount)
 	// alloc(arena, &context.Warnings, 100)
@@ -200,8 +199,7 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 	}
 
 	openLayoutElementID := decl.ID
-	_ = openLayoutElementID
-	openLayoutElement.ElementConfigs = context.ElementConfigs[len(context.ElementConfigs):]
+	openLayoutElement.ElementConfigs = context.ElementConfigs[len(context.ElementConfigs):len(context.ElementConfigs)]
 	var sharedConfig SharedElementConfig
 	if decl.BackgroundColor.A > 0 {
 		sharedConfig.BackgroundColor = decl.BackgroundColor
@@ -214,11 +212,11 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 	}
 	if sharedConfig != (SharedElementConfig{}) {
 		context.SharedElementConfigs = arradd(context.SharedElementConfigs, sharedConfig)
-		openLayoutElement.attachConfig(&context.SharedElementConfigs[len(context.SharedElementConfigs)-1])
+		context.rawAttachElementConfig(openLayoutElement, arrlast(context.SharedElementConfigs))
 	}
 	if decl.Image.ImageData != nil {
 		context.ImageElementConfigs = arradd(context.ImageElementConfigs, decl.Image)
-		openLayoutElement.attachConfig(&context.ImageElementConfigs[len(context.ImageElementConfigs)-1])
+		context.rawAttachElementConfig(openLayoutElement, arrlast(context.ImageElementConfigs))
 	}
 	if decl.Floating.AttachTo != AttachToNone && len(context.OpenLayoutElementStack) >= 2 {
 		floatingConfig := decl.Floating
@@ -250,7 +248,7 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 			Zindex:             floatingConfig.Zindex,
 		})
 		context.FloatingElementConfigs = arradd(context.FloatingElementConfigs, floatingConfig)
-		openLayoutElement.attachConfig(context.FloatingElementConfigs[len(context.FloatingElementConfigs)-1])
+		context.rawAttachElementConfig(openLayoutElement, arrlast(context.FloatingElementConfigs))
 	}
 	if openLayoutElementID.ID != 0 {
 		context.attachID(openLayoutElementID)
@@ -260,7 +258,7 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 
 	if decl.Scroll.Horizontal || decl.Scroll.Vertical {
 		context.ScrollElementConfigs = arradd(context.ScrollElementConfigs, decl.Scroll)
-		openLayoutElement.attachConfig(arrlast(context.ScrollElementConfigs))
+		context.rawAttachElementConfig(openLayoutElement, arrlast(context.ScrollElementConfigs))
 		var scrollOffset *scrollContainerDataInternal
 		for i := intn(0); i < arrlen(context.scrollContainerDatas); i++ {
 			mapping := &context.scrollContainerDatas[i]
@@ -286,7 +284,7 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 	}
 	if decl.Border.Width != (BorderWidth{}) {
 		context.BorderElementConfigs = arradd(context.BorderElementConfigs, decl.Border)
-		openLayoutElement.attachConfig(arrlast(context.BorderElementConfigs))
+		context.rawAttachElementConfig(openLayoutElement, arrlast(context.BorderElementConfigs))
 	}
 	return nil
 }
@@ -1245,17 +1243,39 @@ func (le *LayoutElement) GetSharedConfig() (*SharedElementConfig, bool) {
 	return cfg, true
 }
 
-func (le *LayoutElement) attachConfig(config any) *ElementConfig {
+func (context *Context) attachElementConfig(config any) *ElementConfig {
+	return context.rawAttachElementConfig(context.openLayoutElement(), config)
+}
+
+func (context *Context) rawAttachElementConfig(openLayoutElement *LayoutElement, config any) *ElementConfig {
 	Type := GetElementConfigType(config)
-	if le.GetConfig(Type) != nil {
+	if openLayoutElement.GetConfig(Type) != nil {
 		panic("element already has type")
 	}
-	le.ElementConfigs = arradd(le.ElementConfigs, ElementConfig{
-		Config: config,
+	context.ElementConfigs = arradd(context.ElementConfigs, ElementConfig{
 		Type:   Type,
+		Config: config,
 	})
-	return &le.ElementConfigs[len(le.ElementConfigs)-1]
+	openLayoutElement.ElementConfigs = openLayoutElement.ElementConfigs[:len(openLayoutElement.ElementConfigs)+1]
+	el := &openLayoutElement.ElementConfigs[len(openLayoutElement.ElementConfigs)-1]
+	sameEl := &context.ElementConfigs[len(context.ElementConfigs)-1]
+	if el != sameEl {
+		panic("array aliasing between open layoutElement and context ElementConfigs contract broken")
+	}
+	return el
 }
+
+// func (le *LayoutElement) attachConfig(config any) *ElementConfig {
+// 	Type := GetElementConfigType(config)
+// 	if le.GetConfig(Type) != nil {
+// 		panic("element already has type")
+// 	}
+// 	le.ElementConfigs = arradd(le.ElementConfigs, ElementConfig{
+// 		Config: config,
+// 		Type:   Type,
+// 	})
+// 	return &le.ElementConfigs[len(le.ElementConfigs)-1]
+// }
 
 func (context *Context) attachID(id ElementID) {
 	element := context.openLayoutElement()
@@ -1278,9 +1298,9 @@ func (context *Context) HashMapItem(id uintn) *LayoutElementHashMapItem {
 
 func (context *Context) AddHashMapItem(elementID ElementID, layoutElem *LayoutElement, idAlias uintn) *LayoutElementHashMapItem {
 	id := elementID.ID
-	_, existing := context.GoHash[id]
+	existingID, existing := context.GoHash[id]
 	if existing {
-		println("an element with this ID already existed")
+		println(context.Generation, "an element with this ID already existed "+elementID.StringID+"; "+existingID.ElementID.StringID)
 	}
 	v := &LayoutElementHashMapItem{
 		Generation:    context.Generation + 1,
