@@ -4,6 +4,28 @@ import (
 	"unsafe"
 )
 
+func (context *Context) openTextElement(text string, config *TextElementConfig) error {
+	if arrlen(context.LayoutElements) == arrcap(context.LayoutElements)-1 || context.warnMaxElementsExceeded() {
+		return ErrElementsCapacityExceeded
+	}
+	parentElement := context.openLayoutElement()
+
+	context.LayoutElements = arradd(context.LayoutElements, LayoutElement{})
+	textElement := arrlast(context.LayoutElements)
+	var v intn
+	if arrlen(context.openClipElementStack) > 0 {
+		v = arrlen(context.openClipElementStack) - 1
+	}
+	context.LayoutElementClipElementIDs[len(context.LayoutElements)-1] = v
+	context.LayoutElementChildrenBuffer = arradd(context.LayoutElementChildrenBuffer, arrlen(context.LayoutElements)-1)
+	textMeasured := context.measureTextCached(text, config)
+
+	_ = parentElement
+	_ = textElement
+	_ = textMeasured
+	return nil
+}
+
 func (context *Context) measureTextCached(text string, config *TextElementConfig) *measureTextCacheItem {
 	id := hashTextWithConfig(text, config)
 	hashbucket := id % (uint32(context.MaxMeasureTextCacheWordCount) / 32)

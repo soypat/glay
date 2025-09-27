@@ -14,6 +14,7 @@ func TestAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	// backgroundColor := Color{90, 90, 90, 255}
 	err = context.Clay(ElementDeclaration{
 		ID:              ID("OuterContainer"),
@@ -27,6 +28,13 @@ func TestAPI(t *testing.T) {
 			Padding:  PaddingAll(16),
 			ChildGap: 16,
 		},
+	}, func(context *Context) error {
+		context.Clay(ElementDeclaration{
+			ID: ID("text"),
+
+			Layout: LayoutConfig{},
+		})
+		return nil
 	})
 	if err != nil {
 		t.Fatal(err)

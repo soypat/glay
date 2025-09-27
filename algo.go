@@ -44,7 +44,7 @@ func (context *Context) Initialize(cfg Config) error {
 	return nil
 }
 
-func (context *Context) Clay(decl ElementDeclaration, declChildren ...func() error) (err error) {
+func (context *Context) Clay(decl ElementDeclaration, declChildren ...func(context *Context) error) (err error) {
 	err = context.openElement()
 	if err != nil {
 		return err
@@ -54,7 +54,7 @@ func (context *Context) Clay(decl ElementDeclaration, declChildren ...func() err
 		return err
 	}
 	for _, decl := range declChildren {
-		err = decl()
+		err = decl(context)
 		if err != nil {
 			return err
 		}
@@ -748,6 +748,7 @@ func (context *Context) calculateFinalLayout() error {
 							break
 						}
 						shouldRender = false
+
 						// TODO bunch of stuff here.
 					case ElementConfigTypeCustom:
 						renderCommand.CommandType = RenderCommandTypeCustom
@@ -758,7 +759,7 @@ func (context *Context) calculateFinalLayout() error {
 							// CustomData: elementConfig.Config, // TODO.
 						}
 					default:
-						println("unknown command?")
+						return errors.New("unknown command")
 					}
 					if shouldRender {
 						context.addRenderCommand(renderCommand)
