@@ -101,12 +101,12 @@ func main() {
 			Floating: glay.FloatingElementConfig{
 				Zindex: 0, // Lower Z-index for parent
 			},
-		}, func() error {
-			err = declButton(&context, "Button1", glay.Color{255, 120, 200, 255}, 200, 50)
+		}, func(context *glay.Context) error {
+			err = declButton(context, "Button1", glay.Color{255, 120, 200, 255}, 200, 50)
 			if err != nil {
 				return err
 			}
-			err = declButton(&context, "Button2", glay.Color{100, 120, 200, 255}, 200, 50)
+			err = declButton(context, "Button2", glay.Color{100, 120, 200, 255}, 200, 50)
 			if err != nil {
 				return err
 			}
