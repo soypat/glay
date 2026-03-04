@@ -13,6 +13,7 @@ const (
 
 var (
 	defaultSharedElementConfig = SharedElementConfig{}
+	defaultLayoutConfig        = LayoutConfig{}
 )
 
 type Config struct {
@@ -300,7 +301,10 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 }
 
 func (context *Context) queryScrollOffset(elementID uintn) Vector2 {
-	panic("user scrolling not implemented")
+	if context.QueryScrollOffsetFunction == nil {
+		return Vector2{}
+	}
+	return context.QueryScrollOffsetFunction(uint32(elementID), context.QueryScrollOffsetUserData)
 }
 
 func (context *Context) generateIDForAnonElement(openLayoutElement *LayoutElement) ElementID {
@@ -753,8 +757,53 @@ func (context *Context) calculateFinalLayout() error {
 							break
 						}
 						shouldRender = false
-
-						// TODO bunch of stuff here.
+						textElementConfig := elementConfig.Config.(*TextElementConfig)
+						textElementData := currentElement.ChildrenOrTextContent.(*TextElementData)
+						naturalLineHeight := textElementData.PreferredDimensions.Height
+						var finalLineHeight floatn
+						if textElementConfig.LineHeight > 0 {
+							finalLineHeight = floatn(textElementConfig.LineHeight)
+						} else {
+							finalLineHeight = naturalLineHeight
+						}
+						lineHeightOffset := (finalLineHeight - naturalLineHeight) / 2
+						yPosition := lineHeightOffset
+						for lineIndex := intn(0); lineIndex < arrlen(textElementData.WrappedLines); lineIndex++ {
+							wrappedLine := &textElementData.WrappedLines[lineIndex]
+							if len(wrappedLine.Line) == 0 {
+								yPosition += finalLineHeight
+								continue
+							}
+							textOffset := currentElementBoundingBox.Width - wrappedLine.Dimensions.Width
+							if textElementConfig.TextAlignment == TextAlignLeft {
+								textOffset = 0
+							}
+							if textElementConfig.TextAlignment == TextAlignCenter {
+								textOffset /= 2
+							}
+							context.addRenderCommand(RenderCommand{
+								BoundingBox: BoundingBox{
+									Vector2:    Vector2{X: currentElementBoundingBox.X + textOffset, Y: currentElementBoundingBox.Y + yPosition},
+									Dimensions: Dimensions{Width: wrappedLine.Dimensions.Width, Height: wrappedLine.Dimensions.Height},
+								},
+								RenderData: &TextRenderData{
+									Contents:      []byte(wrappedLine.Line),
+									TextColor:     textElementConfig.TextColor,
+									FontID:        textElementConfig.FontID,
+									FontSize:      textElementConfig.FontSize,
+									LetterSpacing: textElementConfig.LetterSpacing,
+									LineHeight:    textElementConfig.LineHeight,
+								},
+								UserData:    sharedConfig.UserData,
+								ID:          hashNumber(uintn(lineIndex), currentElement.ID).ID,
+								Zindex:      root.Zindex,
+								CommandType: RenderCommandTypeText,
+							})
+							yPosition += finalLineHeight
+							if !context.DisableCulling && (currentElementBoundingBox.Y+yPosition > context.LayoutDimensions.Height) {
+								break
+							}
+						}
 					case ElementConfigTypeCustom:
 						renderCommand.CommandType = RenderCommandTypeCustom
 						renderCommand.RenderData = CustomRenderData{

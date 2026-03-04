@@ -28,8 +28,10 @@ type Context struct {
 	ExternalScrollHandlingEnabled bool
 	DebugSelectElementID          uintn
 	Generation                    uintn
+	MeasureTextFunction           func(text string, config *TextElementConfig, userData any) Dimensions
 	MeasureTextUserData           any
-	QueryScrollOffsetUserData     any
+	QueryScrollOffsetFunction func(elementID uint32, userData any) Vector2
+	QueryScrollOffsetUserData any
 	// Layout elements / render commands
 	LayoutElements              []LayoutElement
 	renderCommands              []RenderCommand
@@ -41,16 +43,16 @@ type Context struct {
 	ReusableElementIndexBuffer  []intn
 	LayoutElementClipElementIDs []intn
 	// Configs
-	LayoutConfigs          []LayoutConfig
-	ElementConfigs         []ElementConfig
-	TextElementConfigs     []TextElementConfig
+	LayoutConfigs             []LayoutConfig
+	ElementConfigs            []ElementConfig
+	TextElementConfigs        []TextElementConfig
 	AspectRatioElementConfigs []AspectRatioElementConfig
 	ImageElementConfigs       []ImageElementConfig
-	FloatingElementConfigs []FloatingElementConfig
-	ClipElementConfigs     []ClipElementConfig
-	CustomElementConfigs   []any
-	BorderElementConfigs   []BorderElementConfig
-	SharedElementConfigs   []SharedElementConfig
+	FloatingElementConfigs    []FloatingElementConfig
+	ClipElementConfigs        []ClipElementConfig
+	CustomElementConfigs      []any
+	BorderElementConfigs      []BorderElementConfig
+	SharedElementConfigs      []SharedElementConfig
 	// Misc Data Structures.
 	LayoutElementIDStrings             []string
 	WrappedTextLines                   []WrappedTextLine
@@ -68,6 +70,7 @@ type Context struct {
 	DynamicStringData                  []byte
 	debugElementData                   []debugElementData
 	GoHash                             map[uintn]*LayoutElementHashMapItem
+	logger
 }
 
 type SharedElementConfig struct {
@@ -79,15 +82,15 @@ type SharedElementConfig struct {
 type ElementConfigType uint8
 
 const (
-	ElementConfigTypeNone     ElementConfigType = iota // element config none
-	ElementConfigTypeBorder                            // element config border
-	ElementConfigTypeFloating                          // element config floating
-	ElementConfigTypeClip                              // element config clip
-	ElementConfigTypeAspectRatio                       // element config aspect ratio
-	ElementConfigTypeImage                             // element config image
-	ElementConfigTypeText                              // element config text
-	ElementConfigTypeCustom                            // element config custom
-	ElementConfigTypeShared                            // element config shared
+	ElementConfigTypeNone        ElementConfigType = iota // element config none
+	ElementConfigTypeBorder                               // element config border
+	ElementConfigTypeFloating                             // element config floating
+	ElementConfigTypeClip                                 // element config clip
+	ElementConfigTypeAspectRatio                          // element config aspect ratio
+	ElementConfigTypeImage                                // element config image
+	ElementConfigTypeText                                 // element config text
+	ElementConfigTypeCustom                               // element config custom
+	ElementConfigTypeShared                               // element config shared
 )
 
 func GetElementConfigType(a any) (Type ElementConfigType) {
@@ -324,11 +327,11 @@ const (
 )
 
 type TextElementConfig struct {
-	TextColor          Color
-	FontID             uint16
-	FontSize           uint16
-	LetterSpacing      uint16
-	LineHeight         uint16
+	TextColor     Color
+	FontID        uint16
+	FontSize      uint16
+	LetterSpacing uint16
+	LineHeight    uint16
 	WrapMode      TextElementConfigWrapMode
 	TextAlignment TextAlignment
 }
@@ -535,6 +538,7 @@ type measuredWord struct {
 type measureTextCacheItem struct {
 	unwrappedDimensions    Dimensions
 	measureWordsStartIndex intn
+	minWidth               floatn
 	containsNewlines       bool
 	// hash map data.
 	ID         uintn

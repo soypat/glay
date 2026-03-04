@@ -1,6 +1,5 @@
 package glay
 
-
 func (context *Context) openTextElement(text string, config *TextElementConfig) error {
 	if arrlen(context.LayoutElements) == arrcap(context.LayoutElements)-1 || context.warnMaxElementsExceeded() {
 		return ErrElementsCapacityExceeded
@@ -9,17 +8,44 @@ func (context *Context) openTextElement(text string, config *TextElementConfig) 
 
 	context.LayoutElements = arradd(context.LayoutElements, LayoutElement{})
 	textElement := arrlast(context.LayoutElements)
-	var v intn
 	if arrlen(context.openClipElementStack) > 0 {
-		v = arrlen(context.openClipElementStack) - 1
+		context.LayoutElementClipElementIDs[len(context.LayoutElements)-1] = context.openClipElementStack[arrlen(context.openClipElementStack)-1]
+	} else {
+		context.LayoutElementClipElementIDs[len(context.LayoutElements)-1] = 0
 	}
-	context.LayoutElementClipElementIDs[len(context.LayoutElements)-1] = v
 	context.LayoutElementChildrenBuffer = arradd(context.LayoutElementChildrenBuffer, arrlen(context.LayoutElements)-1)
 	textMeasured := context.measureTextCached(text, config)
 
-	_ = parentElement
-	_ = textElement
-	_ = textMeasured
+	elementID := hashNumber(uintn(len(parentElement.Children())), parentElement.ID)
+	textElement.ID = elementID.ID
+	context.AddHashMapItem(elementID, textElement, 0)
+	context.LayoutElementIDStrings = arradd(context.LayoutElementIDStrings, elementID.StringID)
+
+	var textHeight floatn
+	if config.LineHeight > 0 {
+		textHeight = floatn(config.LineHeight)
+	} else {
+		textHeight = textMeasured.unwrappedDimensions.Height
+	}
+	textElement.Dimensions = Dimensions{Width: textMeasured.unwrappedDimensions.Width, Height: textHeight}
+	textElement.MinDimensions = Dimensions{Width: textMeasured.minWidth, Height: textHeight}
+
+	context.TextElementData = arradd(context.TextElementData, TextElementData{
+		Text:                text,
+		PreferredDimensions: textMeasured.unwrappedDimensions,
+		ElementIndex:        arrlen(context.LayoutElements) - 1,
+	})
+	textElement.ChildrenOrTextContent = arrlast(context.TextElementData)
+
+	context.ElementConfigs = arradd(context.ElementConfigs, ElementConfig{
+		Type:   ElementConfigTypeText,
+		Config: config,
+	})
+	textElement.ElementConfigs = context.ElementConfigs[len(context.ElementConfigs)-1:]
+	textElement.LayoutConfig = &defaultLayoutConfig
+
+	children := parentElement.Children()
+	parentElement.ChildrenOrTextContent = append(children, -1)
 	return nil
 }
 
@@ -91,6 +117,7 @@ func (context *Context) measureTextCached(text string, config *TextElementConfig
 			if length > 0 {
 				dimensions = context.measureTextRaw(text[start:], config)
 			}
+			measured.minWidth = max(dimensions.Width, measured.minWidth)
 			measuredHeight = max(measuredHeight, dimensions.Height)
 			if current == ' ' {
 				dimensions.Width += spaceWidth
@@ -120,6 +147,7 @@ func (context *Context) measureTextCached(text string, config *TextElementConfig
 		_ = context.addMeasuredWord(word, prevWord)
 		lineWidth += dimensions.Width
 		measuredHeight = max(measuredHeight, dimensions.Height)
+		measured.minWidth = max(dimensions.Width, measured.minWidth)
 	}
 	measuredWidth = max(lineWidth, measuredWidth)
 
@@ -140,7 +168,11 @@ func (context *Context) measureSpaceWidth(textconfig *TextElementConfig) floatn 
 }
 
 func (context *Context) measureTextRaw(text string, textconfig *TextElementConfig) Dimensions {
-	return Dimensions{}
+	if context.MeasureTextFunction == nil {
+		context.logerr("measuretextfunc==nil")
+		return Dimensions{}
+	}
+	return context.MeasureTextFunction(text, textconfig, context.MeasureTextUserData)
 }
 
 func (context *Context) addMeasuredWord(word measuredWord, previousWord *measuredWord) *measuredWord {
