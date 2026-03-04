@@ -127,13 +127,36 @@ func main() {
 			return nil
 		})
 
-		// Footer.
+		// Footer with border.
 		ctx.Clay(glay.ElementDeclaration{
 			ID:              glay.ID("Footer"),
 			BackgroundColor: glay.Color{R: 50, G: 50, B: 70, A: 255},
 			Layout: glay.LayoutConfig{
-				Sizing: glay.Sizing{Width: grow(), Height: fixed(32)},
+				LayoutDirection: glay.LeftToRight,
+				Sizing:          glay.Sizing{Width: grow(), Height: fixed(32)},
+				Padding:         glay.PaddingAll(4),
+				ChildGap:        8,
 			},
+			Border: glay.BorderElementConfig{
+				Color: glay.Color{R: 200, G: 200, B: 50, A: 255},
+				Width: glay.BorderWidth{Left: 2, Right: 2, Top: 2, Bottom: 2, BetweenChildren: 2},
+			},
+		}, func(ctx *glay.Context) error {
+			ctx.Clay(glay.ElementDeclaration{
+				ID:              glay.ID("FooterLeft"),
+				BackgroundColor: glay.Color{R: 80, G: 80, B: 120, A: 255},
+				Layout: glay.LayoutConfig{
+					Sizing: glay.Sizing{Width: grow(), Height: grow()},
+				},
+			})
+			ctx.Clay(glay.ElementDeclaration{
+				ID:              glay.ID("FooterRight"),
+				BackgroundColor: glay.Color{R: 120, G: 80, B: 80, A: 255},
+				Layout: glay.LayoutConfig{
+					Sizing: glay.Sizing{Width: grow(), Height: grow()},
+				},
+			})
+			return nil
 		})
 		return nil
 	})
@@ -147,8 +170,20 @@ func main() {
 	img := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
 	for _, cmd := range cmds {
 		switch data := cmd.RenderData.(type) {
-		case glay.RectangleRenderData:
+		case *glay.RectangleRenderData:
 			drawRect(img, cmd.BoundingBox, data.BackgroundColor)
+		case *glay.BorderRenderData:
+			bb := cmd.BoundingBox
+			c := data.Color
+			w := data.Width
+			// Top
+			drawRect(img, glay.BoundingBox{Vector2: glay.Vector2{X: bb.X, Y: bb.Y}, Dimensions: glay.Dimensions{Width: bb.Width, Height: float32(w.Top)}}, c)
+			// Bottom
+			drawRect(img, glay.BoundingBox{Vector2: glay.Vector2{X: bb.X, Y: bb.Y + bb.Height - float32(w.Bottom)}, Dimensions: glay.Dimensions{Width: bb.Width, Height: float32(w.Bottom)}}, c)
+			// Left
+			drawRect(img, glay.BoundingBox{Vector2: glay.Vector2{X: bb.X, Y: bb.Y}, Dimensions: glay.Dimensions{Width: float32(w.Left), Height: bb.Height}}, c)
+			// Right
+			drawRect(img, glay.BoundingBox{Vector2: glay.Vector2{X: bb.X + bb.Width - float32(w.Right), Y: bb.Y}, Dimensions: glay.Dimensions{Width: float32(w.Right), Height: bb.Height}}, c)
 		}
 	}
 

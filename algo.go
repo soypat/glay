@@ -826,11 +826,10 @@ func (context *Context) calculateFinalLayout() error {
 				if emitRectangle {
 					context.addRenderCommand(RenderCommand{
 						BoundingBox: currentElementBoundingBox,
-						RenderData: RectangleRenderData{
+						RenderData: &RectangleRenderData{
 							BackgroundColor: sharedConfig.BackgroundColor,
 							CornerRadius:    sharedConfig.CornerRadius,
 						},
-						// TODO: Render Data
 						UserData:    sharedConfig.UserData,
 						ID:          currentElement.ID,
 						Zindex:      root.Zindex,
@@ -909,7 +908,11 @@ func (context *Context) calculateFinalLayout() error {
 						sharedConfig, _ := currentElement.GetSharedConfig()
 						renderCommand := RenderCommand{
 							BoundingBox: currentElementBoundingBox,
-							// RenderData: TODO,
+							RenderData: &BorderRenderData{
+								Color:        borderConfig.Color,
+								CornerRadius: sharedConfig.CornerRadius,
+								Width:        borderConfig.Width,
+							},
 							UserData:    sharedConfig.UserData,
 							ID:          hashNumber(currentElement.ID, uintn(len(children))).ID,
 							CommandType: RenderCommandTypeBorder,
@@ -923,10 +926,15 @@ func (context *Context) calculateFinalLayout() error {
 									childElement := &context.LayoutElements[children[i]]
 									if i > 0 {
 										context.addRenderCommand(RenderCommand{
-											// BoundingBox: ,
-											// RenderData: ,
+											BoundingBox: BoundingBox{
+												Vector2:    Vector2{X: currentElementBoundingBox.X + borderOffset.X + scrollOffset.X, Y: currentElementBoundingBox.Y + scrollOffset.Y},
+												Dimensions: Dimensions{Width: floatn(borderConfig.Width.BetweenChildren), Height: currentElement.Dimensions.Height},
+											},
+											RenderData: &RectangleRenderData{
+												BackgroundColor: borderConfig.Color,
+											},
 											UserData:    sharedConfig.UserData,
-											ID:          hashNumber(currentElement.ID, uintn(arrlen(children)+i+1)).ID,
+											ID:          hashNumber(currentElement.ID, uintn(arrlen(children)+1+i)).ID,
 											CommandType: RenderCommandTypeRectangle,
 										})
 									}
@@ -937,10 +945,15 @@ func (context *Context) calculateFinalLayout() error {
 									childElement := &context.LayoutElements[children[i]]
 									if i > 0 {
 										context.addRenderCommand(RenderCommand{
-											// BoundingBox: ,
-											// RenderData: ,
+											BoundingBox: BoundingBox{
+												Vector2:    Vector2{X: currentElementBoundingBox.X + scrollOffset.X, Y: currentElementBoundingBox.Y + borderOffset.Y + scrollOffset.Y},
+												Dimensions: Dimensions{Width: currentElement.Dimensions.Width, Height: floatn(borderConfig.Width.BetweenChildren)},
+											},
+											RenderData: &RectangleRenderData{
+												BackgroundColor: borderConfig.Color,
+											},
 											UserData:    sharedConfig.UserData,
-											ID:          hashNumber(currentElement.ID, uintn(arrlen(children)+i+1)).ID,
+											ID:          hashNumber(currentElement.ID, uintn(arrlen(children)+1+i)).ID,
 											CommandType: RenderCommandTypeRectangle,
 										})
 									}
