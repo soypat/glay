@@ -810,7 +810,6 @@ func (context *Context) calculateFinalLayout() error {
 							BackgroundColor: sharedConfig.BackgroundColor,
 							CornerRadius:    sharedConfig.CornerRadius,
 							CustomData:      elementConfig.Config,
-							// CustomData: elementConfig.Config, // TODO.
 						}
 					default:
 						return errors.New("unknown command")
