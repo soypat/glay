@@ -393,11 +393,7 @@ func (context *Context) closeElement() error {
 	openLayoutElement = context.openLayoutElement()
 	if !elementIsFloating && len(context.OpenLayoutElementStack) > 1 {
 		children := openLayoutElement.Children()
-		if children == nil {
-			openLayoutElement.ChildrenOrTextContent = append(children, -1) // Extend with bogus data and allocate buffer.
-		} else {
-			openLayoutElement.ChildrenOrTextContent = arrextend(children, 1) // Normally extend buffer.
-		}
+		openLayoutElement.ChildrenOrTextContent = append(children, -1) // Extend with bogus data and allocate buffer.
 
 		context.LayoutElementChildrenBuffer = arradd(context.LayoutElementChildrenBuffer, closingElementIndex)
 	}
