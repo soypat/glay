@@ -12,15 +12,16 @@ func _() {
 	_ = x[ElementConfigTypeBorder-1]
 	_ = x[ElementConfigTypeFloating-2]
 	_ = x[ElementConfigTypeClip-3]
-	_ = x[ElementConfigTypeImage-4]
-	_ = x[ElementConfigTypeText-5]
-	_ = x[ElementConfigTypeCustom-6]
-	_ = x[ElementConfigTypeShared-7]
+	_ = x[ElementConfigTypeAspectRatio-4]
+	_ = x[ElementConfigTypeImage-5]
+	_ = x[ElementConfigTypeText-6]
+	_ = x[ElementConfigTypeCustom-7]
+	_ = x[ElementConfigTypeShared-8]
 }
 
-const _ElementConfigType_name = "element config noneelement config borderelement config floatingelement config scrollelement config imageelement config textelement config customelement config shared"
+const _ElementConfigType_name = "element config noneelement config borderelement config floatingelement config clipelement config aspect ratioelement config imageelement config textelement config customelement config shared"
 
-var _ElementConfigType_index = [...]uint8{0, 19, 40, 63, 84, 104, 123, 144, 165}
+var _ElementConfigType_index = [...]uint8{0, 19, 40, 63, 82, 109, 129, 148, 169, 190}
 
 func (i ElementConfigType) String() string {
 	if i >= ElementConfigType(len(_ElementConfigType_index)-1) {

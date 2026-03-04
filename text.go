@@ -1,8 +1,5 @@
 package glay
 
-import (
-	"unsafe"
-)
 
 func (context *Context) openTextElement(text string, config *TextElementConfig) error {
 	if arrlen(context.LayoutElements) == arrcap(context.LayoutElements)-1 || context.warnMaxElementsExceeded() {
@@ -160,22 +157,11 @@ func (context *Context) addMeasuredWord(word measuredWord, previousWord *measure
 }
 
 func hashTextWithConfig(text string, config *TextElementConfig) (hash uint32) {
-	ptrAsNumber := (uintptr)(unsafe.Pointer(&text)) // First value of string header is pointer.
-	if config.HashStringContents {
-		maxTextLengthToHash := min(len(text), 256)
-		for i := 0; i < maxTextLengthToHash; i++ {
-			hash += uint32(text[i])
-			hash += (hash << 10)
-			hash ^= (hash >> 6)
-		}
-	} else {
-		hash += uint32(ptrAsNumber)
+	for i := 0; i < len(text); i++ {
+		hash += uint32(text[i])
 		hash += (hash << 10)
 		hash ^= (hash >> 6)
 	}
-	hash += uint32(len(text))
-	hash += (hash << 10)
-	hash ^= (hash >> 6)
 
 	hash += uint32(config.FontID)
 	hash += (hash << 10)
@@ -185,15 +171,7 @@ func hashTextWithConfig(text string, config *TextElementConfig) (hash uint32) {
 	hash += (hash << 10)
 	hash ^= (hash >> 6)
 
-	hash += uint32(config.LineHeight)
-	hash += (hash << 10)
-	hash ^= (hash >> 6)
-
 	hash += uint32(config.LetterSpacing)
-	hash += (hash << 10)
-	hash ^= (hash >> 6)
-
-	hash += uint32(config.WrapMode)
 	hash += (hash << 10)
 	hash ^= (hash >> 6)
 

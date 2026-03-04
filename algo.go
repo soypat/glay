@@ -65,7 +65,7 @@ func (context *Context) Clay(decl ElementDeclaration, declChildren ...func(conte
 func (context *Context) initializePersistentMemory(arena *_Arena) {
 	maxElemCount := context.MaxElementCount
 	maxMeasureTextCacheWordCount := context.MaxMeasureTextCacheWordCount
-	alloc(arena, &context.scrollContainerDatas, 10)
+	alloc(arena, &context.scrollContainerDatas, 100)
 	// alloc(arena, &context.layoutElementHashMapInternal, maxElemCount)
 	// alloc(arena, &context.LayoutElementHashMap, maxElemCount)
 	alloc(arena, &context.measureTextHashMapInternal, maxElemCount)
@@ -87,6 +87,7 @@ func (context *Context) initializeEphemeralMemory(arena *_Arena) {
 	alloc(arena, &context.LayoutConfigs, maxElementCount)
 	alloc(arena, &context.ElementConfigs, maxElementCount)
 	alloc(arena, &context.TextElementConfigs, maxElementCount)
+	alloc(arena, &context.AspectRatioElementConfigs, maxElementCount)
 	alloc(arena, &context.ImageElementConfigs, maxElementCount)
 	alloc(arena, &context.FloatingElementConfigs, maxElementCount)
 	alloc(arena, &context.ClipElementConfigs, maxElementCount)
@@ -104,6 +105,7 @@ func (context *Context) initializeEphemeralMemory(arena *_Arena) {
 	alloc(arena, &context.LayoutElementChildren, maxElementCount)
 	alloc(arena, &context.OpenLayoutElementStack, maxElementCount)
 	alloc(arena, &context.openClipElementStack, maxElementCount)
+	alloc(arena, &context.AspectRatioElementIndexes, maxElementCount)
 	alloc(arena, &context.ReusableElementIndexBuffer, maxElementCount)
 	alloc(arena, &context.LayoutElementClipElementIDs, maxElementCount)
 	alloc(arena, &context.DynamicStringData, maxElementCount)
@@ -218,6 +220,11 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 		context.ImageElementConfigs = arradd(context.ImageElementConfigs, decl.Image)
 		context.rawAttachElementConfig(openLayoutElement, arrlast(context.ImageElementConfigs))
 	}
+	if decl.AspectRatio.AspectRatio > 0 {
+		context.AspectRatioElementConfigs = arradd(context.AspectRatioElementConfigs, decl.AspectRatio)
+		context.rawAttachElementConfig(openLayoutElement, arrlast(context.AspectRatioElementConfigs))
+		context.AspectRatioElementIndexes = arradd(context.AspectRatioElementIndexes, arrlen(context.LayoutElements)-1)
+	}
 	if decl.Floating.AttachTo != AttachToNone && len(context.OpenLayoutElementStack) >= 2 {
 		floatingConfig := decl.Floating
 		hierarchicalParent := &context.LayoutElements[context.OpenLayoutElementStack[len(context.OpenLayoutElementStack)-2]]
@@ -237,6 +244,9 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 			// clipElementID = uintn(context.LayoutElementClipElementIDs[parentItem.LayoutElement])
 		case AttachToRoot:
 			floatingConfig.ParentID = hashString(rootContainerStr, 0, 0).ID
+		}
+		if floatingConfig.ClipTo == ClipToNone {
+			clipElementID = 0
 		}
 		if openLayoutElement.ID == 0 {
 			openLayoutElementID = hashString("Clay__FloatingContainer", uintn(arrlen(context.LayoutElementTreeRoots)), 0)
@@ -478,11 +488,12 @@ func (context *Context) calculateFinalLayout() error {
 		containerElement.Dimensions.Height = lineHeight * floatn(arrlen(textElementData.WrappedLines))
 	}
 
-	// Scale vertical image heights according to aspect ratio.
-	for i := intn(0); i < arrlen(context.ImageElementPointers); i++ {
-		imageElement := &context.LayoutElements[context.ImageElementPointers[i]]
-		config := imageElement.GetConfig(ElementConfigTypeImage).(*ImageElementConfig)
-		imageElement.Dimensions.Height = config.SourceDimensions.Height / max(config.SourceDimensions.Width, 1) * imageElement.Dimensions.Width
+	// Scale vertical heights according to aspect ratio.
+	for i := intn(0); i < arrlen(context.AspectRatioElementIndexes); i++ {
+		aspectElement := &context.LayoutElements[context.AspectRatioElementIndexes[i]]
+		config := aspectElement.GetConfig(ElementConfigTypeAspectRatio).(*AspectRatioElementConfig)
+		aspectElement.Dimensions.Height = (1 / config.AspectRatio) * aspectElement.Dimensions.Width
+		aspectElement.LayoutConfig.Sizing.Height.MinMax.Max = aspectElement.Dimensions.Height
 	}
 
 	// Propagate effect of text wrapping, image aspect scaling, etc. on height of parents.
@@ -534,6 +545,13 @@ func (context *Context) calculateFinalLayout() error {
 
 	// Calculate sizing along Y axis.
 	context.sizeContainersAlongAxis(false)
+
+	// Scale horizontal widths according to aspect ratio.
+	for i := intn(0); i < arrlen(context.AspectRatioElementIndexes); i++ {
+		aspectElement := &context.LayoutElements[context.AspectRatioElementIndexes[i]]
+		config := aspectElement.GetConfig(ElementConfigTypeAspectRatio).(*AspectRatioElementConfig)
+		aspectElement.Dimensions.Width = config.AspectRatio * aspectElement.Dimensions.Height
+	}
 
 	// Sort tree roots by z-index.
 	sortMax := arrlen(context.LayoutElementTreeRoots) - 1
@@ -611,18 +629,11 @@ func (context *Context) calculateFinalLayout() error {
 				// Floating elements that are attached to scrolling contents won't be correctly positioned if external scroll handling is enabled, fix here
 				if context.ExternalScrollHandlingEnabled {
 					scrollConfig := clipHashMapItem.LayoutElement.GetConfig(ElementConfigTypeClip).(*ClipElementConfig)
-					for i := intn(0); i < arrlen(context.scrollContainerDatas); i++ {
-						mapping := &context.scrollContainerDatas[i]
-						if mapping.LayoutElement == clipHashMapItem.LayoutElement {
-							root.PointerOffset = mapping.ScrollPosition
-							if scrollConfig.Horizontal {
-								rootPosition.X += mapping.ScrollPosition.X
-							}
-							if scrollConfig.Vertical {
-								rootPosition.Y += mapping.ScrollPosition.Y
-							}
-							break
-						}
+					if scrollConfig.Horizontal {
+						rootPosition.X += scrollConfig.ChildOffset.X
+					}
+					if scrollConfig.Vertical {
+						rootPosition.Y += scrollConfig.ChildOffset.Y
 					}
 				}
 				context.addRenderCommand(RenderCommand{
@@ -665,12 +676,7 @@ func (context *Context) calculateFinalLayout() error {
 						if mapping.LayoutElement == currentElement {
 							scrollContainerData = mapping
 							mapping.BoundingBox = currentElementBoundingBox
-							if scrollConfig.Horizontal {
-								scrollOffset.X = mapping.ScrollPosition.X
-							}
-							if scrollConfig.Vertical {
-								scrollOffset.Y = mapping.ScrollPosition.Y
-							}
+							scrollOffset = scrollConfig.ChildOffset
 							if context.ExternalScrollHandlingEnabled {
 								scrollOffset = Vector2{}
 							}
@@ -837,12 +843,7 @@ func (context *Context) calculateFinalLayout() error {
 					for i := intn(0); i < arrlen(context.scrollContainerDatas); i++ {
 						mapping := &context.scrollContainerDatas[i]
 						if mapping.LayoutElement == currentElement {
-							if scrollConfig.Horizontal {
-								scrollOffset.X = mapping.ScrollPosition.X
-							}
-							if scrollConfig.Vertical {
-								scrollOffset.Y = mapping.ScrollPosition.Y
-							}
+							scrollOffset = scrollConfig.ChildOffset
 							if context.ExternalScrollHandlingEnabled {
 								scrollOffset = Vector2{}
 							}
@@ -1216,18 +1217,17 @@ func (context *Context) IsOffscreen(boundingBox *BoundingBox) bool {
 }
 
 func (le *LayoutElement) UpdateAspectRatioBox() {
-	imageConfig, ok := le.GetConfig(ElementConfigTypeImage).(*ImageElementConfig)
+	aspectConfig, ok := le.GetConfig(ElementConfigTypeAspectRatio).(*AspectRatioElementConfig)
 	if !ok {
 		return
 	}
-	if imageConfig.SourceDimensions.Width == 0 || imageConfig.SourceDimensions.Height == 0 {
+	if aspectConfig.AspectRatio == 0 {
 		return
 	}
-	aspect := imageConfig.SourceDimensions.Aspect()
 	if le.Dimensions.Width == 0 && le.Dimensions.Height != 0 {
-		le.Dimensions.Width = le.Dimensions.Height * aspect
+		le.Dimensions.Width = le.Dimensions.Height * aspectConfig.AspectRatio
 	} else if le.Dimensions.Width != 0 && le.Dimensions.Height == 0 {
-		le.Dimensions.Height = le.Dimensions.Width * (1 / aspect)
+		le.Dimensions.Height = le.Dimensions.Width * (1 / aspectConfig.AspectRatio)
 	}
 }
 
@@ -1437,7 +1437,7 @@ func hashNumber(offset, seed uintn) ElementID {
 	hash += (hash << 3)
 	hash ^= (hash >> 11)
 	hash += (hash << 15)
-	return ElementID{ID: hash + 1, Offset: offset}
+	return ElementID{ID: hash + 1, Offset: offset, BaseID: seed}
 }
 
 func hashString(key string, offset, seed uintn) ElementID {

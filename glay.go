@@ -37,14 +37,15 @@ type Context struct {
 	LayoutElementChildren       []intn
 	LayoutElementChildrenBuffer []intn
 	TextElementData             []TextElementData
-	ImageElementPointers        []intn
+	AspectRatioElementIndexes   []intn
 	ReusableElementIndexBuffer  []intn
 	LayoutElementClipElementIDs []intn
 	// Configs
 	LayoutConfigs          []LayoutConfig
 	ElementConfigs         []ElementConfig
 	TextElementConfigs     []TextElementConfig
-	ImageElementConfigs    []ImageElementConfig
+	AspectRatioElementConfigs []AspectRatioElementConfig
+	ImageElementConfigs       []ImageElementConfig
 	FloatingElementConfigs []FloatingElementConfig
 	ClipElementConfigs     []ClipElementConfig
 	CustomElementConfigs   []any
@@ -81,7 +82,8 @@ const (
 	ElementConfigTypeNone     ElementConfigType = iota // element config none
 	ElementConfigTypeBorder                            // element config border
 	ElementConfigTypeFloating                          // element config floating
-	ElementConfigTypeClip                              // element config scroll
+	ElementConfigTypeClip                              // element config clip
+	ElementConfigTypeAspectRatio                       // element config aspect ratio
 	ElementConfigTypeImage                             // element config image
 	ElementConfigTypeText                              // element config text
 	ElementConfigTypeCustom                            // element config custom
@@ -96,6 +98,8 @@ func GetElementConfigType(a any) (Type ElementConfigType) {
 		Type = ElementConfigTypeFloating
 	case *ClipElementConfig:
 		Type = ElementConfigTypeClip
+	case *AspectRatioElementConfig:
+		Type = ElementConfigTypeAspectRatio
 	case *ImageElementConfig:
 		Type = ElementConfigTypeImage
 	case *TextElementConfig:
@@ -325,9 +329,12 @@ type TextElementConfig struct {
 	FontSize           uint16
 	LetterSpacing      uint16
 	LineHeight         uint16
-	WrapMode           TextElementConfigWrapMode
-	TextAlignment      TextAlignment
-	HashStringContents bool
+	WrapMode      TextElementConfigWrapMode
+	TextAlignment TextAlignment
+}
+
+type AspectRatioElementConfig struct {
+	AspectRatio floatn
 }
 
 type ImageElementConfig struct {
@@ -370,6 +377,13 @@ const (
 	AttachToRoot                                         // attach to root
 )
 
+type FloatingClipToElement uint8
+
+const (
+	ClipToNone           FloatingClipToElement = iota // clip to none
+	ClipToAttachedParent                              // clip to attached parent
+)
+
 type FloatingElementConfig struct {
 	Offset             Vector2
 	Expand             Dimensions
@@ -378,11 +392,13 @@ type FloatingElementConfig struct {
 	AttachPoints       FloatingAttachPoints
 	PointerCaptureMode MousePointerCaptureMode
 	AttachTo           FloatingAttachToElement
+	ClipTo             FloatingClipToElement
 }
 
 type ClipElementConfig struct {
-	Horizontal bool
-	Vertical   bool
+	Horizontal  bool
+	Vertical    bool
+	ChildOffset Vector2
 }
 
 type BorderWidth struct {
@@ -483,6 +499,7 @@ type ElementDeclaration struct {
 	Layout          LayoutConfig
 	BackgroundColor Color
 	CornerRadius    CornerRadius
+	AspectRatio     AspectRatioElementConfig
 	Image           ImageElementConfig
 	Floating        FloatingElementConfig
 	Clip            ClipElementConfig
