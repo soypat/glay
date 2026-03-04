@@ -89,7 +89,7 @@ func (context *Context) initializeEphemeralMemory(arena *_Arena) {
 	alloc(arena, &context.TextElementConfigs, maxElementCount)
 	alloc(arena, &context.ImageElementConfigs, maxElementCount)
 	alloc(arena, &context.FloatingElementConfigs, maxElementCount)
-	alloc(arena, &context.ScrollElementConfigs, maxElementCount)
+	alloc(arena, &context.ClipElementConfigs, maxElementCount)
 	alloc(arena, &context.CustomElementConfigs, maxElementCount)
 	alloc(arena, &context.BorderElementConfigs, maxElementCount)
 	alloc(arena, &context.SharedElementConfigs, maxElementCount)
@@ -256,9 +256,9 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 		openLayoutElementID = context.generateIDForAnonElement(openLayoutElement)
 	}
 
-	if decl.Scroll.Horizontal || decl.Scroll.Vertical {
-		context.ScrollElementConfigs = arradd(context.ScrollElementConfigs, decl.Scroll)
-		context.rawAttachElementConfig(openLayoutElement, arrlast(context.ScrollElementConfigs))
+	if decl.Clip.Horizontal || decl.Clip.Vertical {
+		context.ClipElementConfigs = arradd(context.ClipElementConfigs, decl.Clip)
+		context.rawAttachElementConfig(openLayoutElement, arrlast(context.ClipElementConfigs))
 		var scrollOffset *scrollContainerDataInternal
 		for i := intn(0); i < arrlen(context.scrollContainerDatas); i++ {
 			mapping := &context.scrollContainerDatas[i]
@@ -309,7 +309,7 @@ func (context *Context) closeElement() error {
 
 	openLayoutElement := context.openLayoutElement()
 	layoutConfig := openLayoutElement.LayoutConfig
-	config, _ := openLayoutElement.GetConfig(ElementConfigTypeScroll).(*ScrollElementConfig)
+	config, _ := openLayoutElement.GetConfig(ElementConfigTypeClip).(*ClipElementConfig)
 	if config != nil {
 		elementHasScrollHorizontal = config.Horizontal
 		elementHasScrollVertical = config.Vertical
@@ -610,7 +610,7 @@ func (context *Context) calculateFinalLayout() error {
 			if clipHashMapItem != nil {
 				// Floating elements that are attached to scrolling contents won't be correctly positioned if external scroll handling is enabled, fix here
 				if context.ExternalScrollHandlingEnabled {
-					scrollConfig := clipHashMapItem.LayoutElement.GetConfig(ElementConfigTypeScroll).(*ScrollElementConfig)
+					scrollConfig := clipHashMapItem.LayoutElement.GetConfig(ElementConfigTypeClip).(*ClipElementConfig)
 					for i := intn(0); i < arrlen(context.scrollContainerDatas); i++ {
 						mapping := &context.scrollContainerDatas[i]
 						if mapping.LayoutElement == clipHashMapItem.LayoutElement {
@@ -658,7 +658,7 @@ func (context *Context) calculateFinalLayout() error {
 					currentElementBoundingBox.Y += expand.Height * 2
 				}
 				var scrollContainerData *scrollContainerDataInternal
-				scrollConfig, _ := currentElement.GetConfig(ElementConfigTypeScroll).(*ScrollElementConfig)
+				scrollConfig, _ := currentElement.GetConfig(ElementConfigTypeClip).(*ClipElementConfig)
 				if scrollConfig != nil {
 					for i := intn(0); i < arrlen(context.scrollContainerDatas); i++ {
 						mapping := &context.scrollContainerDatas[i]
@@ -701,7 +701,7 @@ func (context *Context) calculateFinalLayout() error {
 						next := sortedConfigIndexes[i+1]
 						currentType := currentElement.ElementConfigs[current].Type
 						nextType := currentElement.ElementConfigs[next].Type
-						if nextType == ElementConfigTypeScroll || currentType == ElementConfigTypeBorder {
+						if nextType == ElementConfigTypeClip || currentType == ElementConfigTypeBorder {
 							sortedConfigIndexes[i] = next
 							sortedConfigIndexes[i+1] = current
 						}
@@ -728,11 +728,11 @@ func (context *Context) calculateFinalLayout() error {
 					switch elementConfig.Type {
 					case ElementConfigTypeFloating, ElementConfigTypeShared, ElementConfigTypeBorder:
 						shouldRender = false
-					case ElementConfigTypeScroll:
+					case ElementConfigTypeClip:
 						renderCommand.CommandType = RenderCommandTypeScissorStart
-						renderCommand.RenderData = &ScrollRenderData{
-							Horizontal: elementConfig.Config.(*ScrollElementConfig).Horizontal,
-							Vertical:   elementConfig.Config.(*ScrollElementConfig).Vertical,
+						renderCommand.RenderData = &ClipRenderData{
+							Horizontal: elementConfig.Config.(*ClipElementConfig).Horizontal,
+							Vertical:   elementConfig.Config.(*ClipElementConfig).Vertical,
 						}
 					case ElementConfigTypeImage:
 						renderCommand.CommandType = RenderCommandTypeImage
@@ -831,7 +831,7 @@ func (context *Context) calculateFinalLayout() error {
 			} else {
 				// DFS is returning upwards backwards.
 				closeScrollElement := false
-				scrollConfig, _ := currentElement.GetConfig(ElementConfigTypeScroll).(*ScrollElementConfig)
+				scrollConfig, _ := currentElement.GetConfig(ElementConfigTypeClip).(*ClipElementConfig)
 				if scrollConfig != nil {
 					closeScrollElement = true
 					for i := intn(0); i < arrlen(context.scrollContainerDatas); i++ {
@@ -1085,7 +1085,7 @@ func (context *Context) sizeContainersAlongAxis(xaxis bool) error {
 				sizeToDistribute := parentSize - parentPadding - innerContentSize
 				// The content is too large, compress children as much as possible.
 				if sizeToDistribute < 0 {
-					scrollCfg, hasScrollConfig := parent.GetConfig(ElementConfigTypeScroll).(*ScrollElementConfig)
+					scrollCfg, hasScrollConfig := parent.GetConfig(ElementConfigTypeClip).(*ClipElementConfig)
 					if hasScrollConfig {
 						if (xaxis && scrollCfg.Horizontal) || (!xaxis && scrollCfg.Vertical) {
 							// If the parent can scroll in the axis direction in this direction, don't compress children, just leave them alone.
@@ -1187,7 +1187,7 @@ func (context *Context) sizeContainersAlongAxis(xaxis bool) error {
 					}
 					// If laying out the children of a scroll panel, grow containers to exapnd to the height of the inner content, not outer content.
 					maxSize := parentSize - parentPadding
-					scrollCfg, ok := parent.GetConfig(ElementConfigTypeScroll).(*ScrollElementConfig)
+					scrollCfg, ok := parent.GetConfig(ElementConfigTypeClip).(*ClipElementConfig)
 					if ok {
 						if (xaxis && scrollCfg.Horizontal) || (!xaxis && scrollCfg.Vertical) {
 							maxSize = max(maxSize, innerContentSize)

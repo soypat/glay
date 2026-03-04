@@ -46,7 +46,7 @@ type Context struct {
 	TextElementConfigs     []TextElementConfig
 	ImageElementConfigs    []ImageElementConfig
 	FloatingElementConfigs []FloatingElementConfig
-	ScrollElementConfigs   []ScrollElementConfig
+	ClipElementConfigs     []ClipElementConfig
 	CustomElementConfigs   []any
 	BorderElementConfigs   []BorderElementConfig
 	SharedElementConfigs   []SharedElementConfig
@@ -81,7 +81,7 @@ const (
 	ElementConfigTypeNone     ElementConfigType = iota // element config none
 	ElementConfigTypeBorder                            // element config border
 	ElementConfigTypeFloating                          // element config floating
-	ElementConfigTypeScroll                            // element config scroll
+	ElementConfigTypeClip                              // element config scroll
 	ElementConfigTypeImage                             // element config image
 	ElementConfigTypeText                              // element config text
 	ElementConfigTypeCustom                            // element config custom
@@ -94,8 +94,8 @@ func GetElementConfigType(a any) (Type ElementConfigType) {
 		Type = ElementConfigTypeBorder
 	case *FloatingElementConfig:
 		Type = ElementConfigTypeFloating
-	case *ScrollElementConfig:
-		Type = ElementConfigTypeScroll
+	case *ClipElementConfig:
+		Type = ElementConfigTypeClip
 	case *ImageElementConfig:
 		Type = ElementConfigTypeImage
 	case *TextElementConfig:
@@ -380,7 +380,7 @@ type FloatingElementConfig struct {
 	AttachTo           FloatingAttachToElement
 }
 
-type ScrollElementConfig struct {
+type ClipElementConfig struct {
 	Horizontal bool
 	Vertical   bool
 }
@@ -410,7 +410,7 @@ type ImageRenderData struct {
 	ImageData        any
 }
 
-type ScrollRenderData struct {
+type ClipRenderData struct {
 	Horizontal, Vertical bool
 }
 type RectangleRenderData struct {
@@ -433,7 +433,7 @@ type ScrollContainerData struct {
 	ScrollPosition            *Vector2
 	ScrollContainerDimensions Dimensions
 	ContentDimensions         Dimensions
-	Config                    ScrollElementConfig
+	Config                    ClipElementConfig
 	Found                     bool
 }
 
@@ -485,7 +485,7 @@ type ElementDeclaration struct {
 	CornerRadius    CornerRadius
 	Image           ImageElementConfig
 	Floating        FloatingElementConfig
-	Scroll          ScrollElementConfig
+	Clip            ClipElementConfig
 	Border          BorderElementConfig
 	UserData        any
 }

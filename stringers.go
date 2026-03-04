@@ -11,7 +11,7 @@ func _() {
 	_ = x[ElementConfigTypeNone-0]
 	_ = x[ElementConfigTypeBorder-1]
 	_ = x[ElementConfigTypeFloating-2]
-	_ = x[ElementConfigTypeScroll-3]
+	_ = x[ElementConfigTypeClip-3]
 	_ = x[ElementConfigTypeImage-4]
 	_ = x[ElementConfigTypeText-5]
 	_ = x[ElementConfigTypeCustom-6]

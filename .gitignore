@@ -24,7 +24,7 @@ vendor/
 .vscode/
 
 # For local development and testing create `local` directories.
-**/local/*
+**/local*
 /output.png
 
 # Output of the go coverage tool, specifically when used with LiteIDE
