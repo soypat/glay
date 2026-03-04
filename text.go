@@ -90,7 +90,10 @@ func (context *Context) measureTextCached(text string, config *TextElementConfig
 		current := text[end]
 		if current == ' ' || current == '\n' {
 			length := end - start
-			dimensions := context.measureTextRaw(text[start:], config)
+			var dimensions Dimensions
+			if length > 0 {
+				dimensions = context.measureTextRaw(text[start:], config)
+			}
 			measuredHeight = max(measuredHeight, dimensions.Height)
 			if current == ' ' {
 				dimensions.Width += spaceWidth

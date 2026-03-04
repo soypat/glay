@@ -231,7 +231,7 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 
 		case AttachToElementWithID:
 			parentItem := context.HashMapItem(floatingConfig.ParentID)
-			if parentItem != nil {
+			if parentItem == nil {
 				return errors.New("a parent item was declared with a parentID but no element with that ID was found")
 			}
 			// clipElementID = uintn(context.LayoutElementClipElementIDs[parentItem.LayoutElement])
@@ -291,7 +291,6 @@ func (context *Context) configureOpenElement(decl ElementDeclaration) error {
 
 func (context *Context) queryScrollOffset(elementID uintn) Vector2 {
 	panic("user scrolling not implemented")
-	return Vector2{-1, -1}
 }
 
 func (context *Context) generateIDForAnonElement(openLayoutElement *LayoutElement) ElementID {
@@ -339,7 +338,9 @@ func (context *Context) closeElement() error {
 			context.LayoutElementChildren = arradd(context.LayoutElementChildren, childIndex)
 		}
 		openLayoutElement.Dimensions.Width += childGap
-		openLayoutElement.MinDimensions.Width += childGap
+		if !elementHasScrollHorizontal {
+			openLayoutElement.MinDimensions.Width += childGap
+		}
 	} else if layoutConfig.LayoutDirection == TopToBottom {
 
 		openLayoutElement.Dimensions.Height = floatn(layoutConfig.Padding.Vertical())
@@ -358,7 +359,9 @@ func (context *Context) closeElement() error {
 			context.LayoutElementChildren = arradd(context.LayoutElementChildren, childIndex)
 		}
 		openLayoutElement.Dimensions.Height += childGap
-		openLayoutElement.MinDimensions.Height += childGap
+		if !elementHasScrollVertical {
+			openLayoutElement.MinDimensions.Height += childGap
+		}
 	}
 	context.LayoutElementChildrenBuffer = context.LayoutElementChildrenBuffer[:len(context.LayoutElementChildrenBuffer)-len(children)]
 
@@ -441,7 +444,7 @@ func (context *Context) calculateFinalLayout() error {
 				lineStartOffset = measuredWord.StartOffset + measuredWord.Length
 			} else if measuredWord.Length == 0 || lineWidth+measuredWord.Width > containerElement.Dimensions.Width {
 				// Wrapped text lines list has overflowed, just render out the line.
-				finalCharIsSpace := textElementData.Text[lineStartOffset+lineLengthChars-1] == ' '
+				finalCharIsSpace := textElementData.Text[max(lineStartOffset+lineLengthChars-1, 0)] == ' '
 				width := lineWidth
 				line := textElementData.Text[lineStartOffset : lineStartOffset+lineLengthChars]
 				if finalCharIsSpace {
@@ -460,14 +463,14 @@ func (context *Context) calculateFinalLayout() error {
 				lineLengthChars = 0
 				lineStartOffset = measuredWord.StartOffset
 			} else {
-				lineWidth += measuredWord.Width
+				lineWidth += measuredWord.Width + floatn(textConfig.LetterSpacing)
 				lineLengthChars += measuredWord.Length
 				wordIndex = measuredWord.Next
 			}
 		}
 		if lineLengthChars > 0 {
 			context.WrappedTextLines = arradd(context.WrappedTextLines, WrappedTextLine{
-				Dimensions: Dimensions{Width: lineWidth, Height: lineHeight},
+				Dimensions: Dimensions{Width: lineWidth - floatn(textConfig.LetterSpacing), Height: lineHeight},
 				Line:       textElementData.Text[lineStartOffset : lineStartOffset+lineLengthChars],
 			})
 			textElementData.WrappedLines = arrextend(textElementData.WrappedLines, 1)
@@ -800,6 +803,7 @@ func (context *Context) calculateFinalLayout() error {
 							extraSpace /= 2
 						}
 						currentElementTreeNode.NextChildOffset.X += extraSpace
+						extraSpace = max(0, extraSpace)
 					} else {
 						for i := intn(0); i < arrlen(children); i++ {
 							childElement := context.LayoutElements[children[i]]
@@ -814,6 +818,7 @@ func (context *Context) calculateFinalLayout() error {
 						case AlignYCenter:
 							extraSpace /= 2
 						}
+						extraSpace = max(0, extraSpace)
 						currentElementTreeNode.NextChildOffset.Y += extraSpace
 					}
 					if scrollContainerData != nil {
@@ -998,11 +1003,17 @@ func (context *Context) sizeContainersAlongAxis(xaxis bool) error {
 			parentItem := context.HashMapItem(floatingCfg.ParentID)
 			if parentItem != nil && !parentItem.isdefault() {
 				parentLayoutElement := parentItem.LayoutElement
-				if rootElement.LayoutConfig.Sizing.Width.Type == SizingGrow {
+				switch rootElement.LayoutConfig.Sizing.Width.Type {
+				case SizingGrow:
 					rootElement.Dimensions.Width = parentLayoutElement.Dimensions.Width
+				case SizingPercent:
+					rootElement.Dimensions.Width = parentLayoutElement.Dimensions.Width * rootElement.LayoutConfig.Sizing.Width.Percent
 				}
-				if rootElement.LayoutConfig.Sizing.Height.Type == SizingGrow {
+				switch rootElement.LayoutConfig.Sizing.Height.Type {
+				case SizingGrow:
 					rootElement.Dimensions.Height = parentLayoutElement.Dimensions.Height
+				case SizingPercent:
+					rootElement.Dimensions.Height = parentLayoutElement.Dimensions.Height * rootElement.LayoutConfig.Sizing.Height.Percent
 				}
 			}
 		}
@@ -1086,7 +1097,7 @@ func (context *Context) sizeContainersAlongAxis(xaxis bool) error {
 					for sizeToDistribute < -eps && arrlen(resizableContainerBuffer) > 0 {
 						var largest, secondLargest, widthToAdd floatn = 0, 0, sizeToDistribute
 						for childIndex := intn(0); childIndex < arrlen(resizableContainerBuffer); childIndex++ {
-							child := &context.LayoutElements[childIndex]
+							child := &context.LayoutElements[resizableContainerBuffer[childIndex]]
 							childSize := child.Dimensions.SizeAxis(xaxis)
 							if floatequal(childSize, largest) {
 								continue
@@ -1216,7 +1227,7 @@ func (le *LayoutElement) UpdateAspectRatioBox() {
 	if le.Dimensions.Width == 0 && le.Dimensions.Height != 0 {
 		le.Dimensions.Width = le.Dimensions.Height * aspect
 	} else if le.Dimensions.Width != 0 && le.Dimensions.Height == 0 {
-		le.Dimensions.Height = le.Dimensions.Height * (1 / aspect)
+		le.Dimensions.Height = le.Dimensions.Width * (1 / aspect)
 	}
 }
 
@@ -1382,10 +1393,10 @@ func (le *LayoutElement) Children() []intn {
 		return v
 	case nil:
 		return nil
-		panic("no children")
-		children := make([]intn, 8)[:0]
-		le.ChildrenOrTextContent = children
-		return children
+		// panic("no children")
+		// children := make([]intn, 8)[:0]
+		// le.ChildrenOrTextContent = children
+		// return children
 	default:
 		panic("children must be of type []intn")
 	}
