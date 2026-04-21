@@ -1,5 +1,11 @@
 package glay
 
+// Text adds a text element as a child of the currently open element.
+// A MeasureTextFunction must be set on the Context before calling Text.
+func (context *Context) Text(text string, config *TextElementConfig) error {
+	return context.openTextElement(text, config)
+}
+
 func (context *Context) openTextElement(text string, config *TextElementConfig) error {
 	if arrlen(context.LayoutElements) == arrcap(context.LayoutElements)-1 || context.warnMaxElementsExceeded() {
 		return ErrElementsCapacityExceeded
