@@ -42,22 +42,22 @@ type uniforms struct {
 }
 
 type State struct {
-	instance      *wgpu.Instance
-	adapter       *wgpu.Adapter
-	surface       *wgpu.Surface
-	device        *wgpu.Device
-	queue         *wgpu.Queue
-	config        *wgpu.SurfaceConfiguration
-	pipeline      *wgpu.RenderPipeline
-	bindGroup     *wgpu.BindGroup
-	bindLayout    *wgpu.BindGroupLayout
+	instance       *wgpu.Instance
+	adapter        *wgpu.Adapter
+	surface        *wgpu.Surface
+	device         *wgpu.Device
+	queue          *wgpu.Queue
+	config         *wgpu.SurfaceConfiguration
+	pipeline       *wgpu.RenderPipeline
+	bindGroup      *wgpu.BindGroup
+	bindLayout     *wgpu.BindGroupLayout
 	pipelineLayout *wgpu.PipelineLayout
-	vertexBuffer  *wgpu.Buffer
-	uniformBuffer *wgpu.Buffer
-	atlasTexture  *wgpu.Texture
-	atlasView     *wgpu.TextureView
-	sampler       *wgpu.Sampler
-	vertexCount   uint32
+	vertexBuffer   *wgpu.Buffer
+	uniformBuffer  *wgpu.Buffer
+	atlasTexture   *wgpu.Texture
+	atlasView      *wgpu.TextureView
+	sampler        *wgpu.Sampler
+	vertexCount    uint32
 }
 
 var forceFallbackAdapter = os.Getenv("WGPU_FORCE_FALLBACK_ADAPTER") == "1"

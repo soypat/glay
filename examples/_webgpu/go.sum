@@ -2,5 +2,5 @@ github.com/cogentcore/webgpu v0.23.0 h1:hrjnnuDZAPSRsqBjQAsJOyg2COGztIkBbxL87r0Q
 github.com/cogentcore/webgpu v0.23.0/go.mod h1:ciqaxChrmRRMU1SnI5OE12Cn3QWvOKO+e5nSy+N9S1o=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20260406072232-3ac4aa2bb164 h1:ddtotcEXIT7dFhSeXIWjK8YMFYl5bB2NdYQwgv6Uqjk=
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20260406072232-3ac4aa2bb164/go.mod h1:SyRD8YfuKk+ZXlDqYiqe1qMSqjNgtHzBTG810KUagMc=
-github.com/soypat/lefevre v0.0.0-20260410154114-fb5b0810a6fe h1:wEitxs0zVbKjUe+5S3N8uA/s40l0PyGpBUFcGxMGDj4=
-github.com/soypat/lefevre v0.0.0-20260410154114-fb5b0810a6fe/go.mod h1:isEsoKIedVFjONjTPEzACot3Wj7eHvvI1y7j56X3ffU=
+github.com/soypat/lefevre v0.0.0-20260422151313-0b734e8d7c1d h1:378rfcSgzf6MWI5sgrGEOC6Mote9fzK0InG48Ha2F6s=
+github.com/soypat/lefevre v0.0.0-20260422151313-0b734e8d7c1d/go.mod h1:isEsoKIedVFjONjTPEzACot3Wj7eHvvI1y7j56X3ffU=
