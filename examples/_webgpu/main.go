@@ -155,16 +155,12 @@ func main() {
 
 		if err := state.render(); err != nil {
 			log.Printf("render error: %v", err)
-			if stringsContains(err.Error(), "Surface timed out") || stringsContains(err.Error(), "Surface is outdated") || stringsContains(err.Error(), "Surface was lost") {
+			if strings.Contains(err.Error(), "Surface timed out") || strings.Contains(err.Error(), "Surface is outdated") || strings.Contains(err.Error(), "Surface was lost") {
 				continue
 			}
 			log.Fatalf("unrecoverable render error: %v", err)
 		}
 	}
-}
-
-func stringsContains(s, substr string) bool {
-	return strings.Index(s, substr) >= 0
 }
 
 // bakeAtlas extracts unique glyph IDs from shaped runs, sorts them (required by
