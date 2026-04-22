@@ -7,18 +7,24 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
+	"unsafe"
 
 	"github.com/cogentcore/webgpu/wgpu"
 	"github.com/cogentcore/webgpu/wgpuglfw"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	kb "github.com/soypat/lefevre"
+	"github.com/soypat/lefevre/raster"
 )
 
 const (
 	defaultWindowWidth  = 1024
 	defaultWindowHeight = 512
 	defaultText         = "Hello, world! مرحبا عالم! office résumé."
+	fontPixelSize       = 48
+	atlasWidth          = 2048
+	atlasHeight         = 256
 )
 
 //go:embed shader.wgsl
@@ -26,19 +32,32 @@ var shaderSource string
 
 type vertex struct {
 	Position [2]float32
+	UV       [2]float32
 	Color    [4]float32
 }
 
+type uniforms struct {
+	Viewport [2]float32
+	_pad     [2]float32
+}
+
 type State struct {
-	instance     *wgpu.Instance
-	adapter      *wgpu.Adapter
-	surface      *wgpu.Surface
-	device       *wgpu.Device
-	queue        *wgpu.Queue
-	config       *wgpu.SurfaceConfiguration
-	pipeline     *wgpu.RenderPipeline
-	vertexBuffer *wgpu.Buffer
-	vertexCount  uint32
+	instance      *wgpu.Instance
+	adapter       *wgpu.Adapter
+	surface       *wgpu.Surface
+	device        *wgpu.Device
+	queue         *wgpu.Queue
+	config        *wgpu.SurfaceConfiguration
+	pipeline      *wgpu.RenderPipeline
+	bindGroup     *wgpu.BindGroup
+	bindLayout    *wgpu.BindGroupLayout
+	pipelineLayout *wgpu.PipelineLayout
+	vertexBuffer  *wgpu.Buffer
+	uniformBuffer *wgpu.Buffer
+	atlasTexture  *wgpu.Texture
+	atlasView     *wgpu.TextureView
+	sampler       *wgpu.Sampler
+	vertexCount   uint32
 }
 
 var forceFallbackAdapter = os.Getenv("WGPU_FORCE_FALLBACK_ADAPTER") == "1"
@@ -82,13 +101,31 @@ func main() {
 		log.Fatalf("failed to parse font: %v", err)
 	}
 
+	info := font.Info()
+	if info.UnitsPerEm == 0 {
+		log.Fatalf("font UnitsPerEm is zero")
+	}
+	scale := float32(fontPixelSize) / float32(info.UnitsPerEm)
+
 	dir, _ := kb.GuessTextProperties(*textArg)
 	cfg := kb.ShapeConfig{Font: font}
 	shaped := cfg.ShapeSimple(nil, *textArg, dir)
 
-	verts, vertexCount, err := buildGlyphVertices(shaped, font)
+	atlas := make([]byte, atlasWidth*atlasHeight)
+	placements, err := bakeAtlas(font, scale, shaped, atlas)
 	if err != nil {
-		log.Fatalf("failed to shape text: %v", err)
+		log.Fatalf("failed to bake atlas: %v", err)
+	}
+
+	penX := 40
+	penY := fontPixelSize + int(float32(info.Ascent)*scale/2)
+	if penY < fontPixelSize {
+		penY = fontPixelSize
+	}
+	quads := raster.BuildQuads(nil, shaped, placements, penX, penY, scale)
+	verts := buildVertices(quads)
+	if len(verts) == 0 {
+		log.Fatalf("no glyphs produced any renderable quads")
 	}
 
 	if err := glfw.Init(); err != nil {
@@ -103,7 +140,7 @@ func main() {
 	}
 	defer window.Destroy()
 
-	state, err := initState(window, verts, vertexCount)
+	state, err := initState(window, verts, atlas)
 	if err != nil {
 		log.Fatalf("failed to initialize WebGPU state: %v", err)
 	}
@@ -130,84 +167,60 @@ func stringsContains(s, substr string) bool {
 	return strings.Index(s, substr) >= 0
 }
 
-func buildGlyphVertices(runs []kb.Run, font *kb.Font) ([]vertex, uint32, error) {
-	info := font.Info()
-	em := float32(info.UnitsPerEm)
-	if em == 0 {
-		return nil, 0, fmt.Errorf("font UnitsPerEm is zero")
-	}
-
-	totalAdvance := int32(0)
+// bakeAtlas extracts unique glyph IDs from shaped runs, sorts them (required by
+// raster.FindPackedGlyph), and rasterizes them into atlas. Returned placements
+// are sorted by GlyphID and ready for raster.BuildQuads.
+func bakeAtlas(font *kb.Font, scale float32, runs []kb.Run, atlas []byte) ([]raster.PackedGlyph, error) {
+	seen := make(map[uint16]struct{})
 	for _, run := range runs {
 		for _, g := range run.Glyphs {
-			totalAdvance += g.AdvanceX
+			seen[g.ID] = struct{}{}
 		}
 	}
-	if totalAdvance == 0 {
-		return nil, 0, fmt.Errorf("shaped text produced no glyph advances")
+	ids := make([]uint16, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
 	}
+	slices.Sort(ids)
 
-	fontHeight := float32(info.Ascent - info.Descent)
-	if fontHeight == 0 {
-		return nil, 0, fmt.Errorf("invalid font ascent/descent metrics")
+	placements := make([]raster.PackedGlyph, len(ids))
+	cfg := raster.PackConfig{Font: font, Scale: scale, Padding: 1}
+	if err := cfg.BakeAtlas(&raster.ScanlineRasterizer{}, ids, atlas, atlasWidth, atlasHeight, placements); err != nil {
+		return nil, err
 	}
-
-	xMargin := float32(0.1)
-	yMargin := float32(0.15)
-	scaleX := (2.0 - 2.0*xMargin) / float32(totalAdvance)
-	scaleY := (2.0 - 2.0*yMargin) / fontHeight
-	scale := scaleX
-	if scaleY < scale {
-		scale = scaleY
-	}
-
-	baseline := float32(-0.4)
-	y0 := baseline + float32(info.Descent)*scale
-	y1 := baseline + float32(info.Ascent)*scale
-	x := float32(-1.0) + xMargin
-
-	var vertices []vertex
-	runIndex := 0
-	for _, run := range runs {
-		for _, g := range run.Glyphs {
-			glyphX := x + float32(g.OffsetX)*scale
-			glyphAdvance := float32(g.AdvanceX) * scale
-			if glyphAdvance < 0.005 {
-				glyphAdvance = 0.005
-			}
-
-			color := [4]float32{0.22, 0.64, 0.92, 1.0}
-			if g.Flags.Has(kb.GlyphFlagLigature) {
-				color = [4]float32{0.98, 0.64, 0.18, 1.0}
-			}
-			if runIndex%2 == 1 {
-				color = [4]float32{color[0] * 0.85, color[1] * 0.9, color[2] * 0.85, 1.0}
-			}
-
-			vertices = append(vertices, quad(glyphX, y0, glyphX+glyphAdvance, y1, color)...) // glyph cell
-			if runIndex == 0 {
-				vertices = append(vertices, quad(glyphX, y0, glyphX+0.002, y0+0.02, [4]float32{1.0, 1.0, 1.0, 1.0})...)
-			}
-			x += glyphAdvance
-		}
-		runIndex++
-	}
-
-	return vertices, uint32(len(vertices)), nil
+	return placements, nil
 }
 
-func quad(x0, y0, x1, y1 float32, color [4]float32) []vertex {
-	return []vertex{
-		{Position: [2]float32{x0, y0}, Color: color},
-		{Position: [2]float32{x1, y0}, Color: color},
-		{Position: [2]float32{x0, y1}, Color: color},
-		{Position: [2]float32{x0, y1}, Color: color},
-		{Position: [2]float32{x1, y0}, Color: color},
-		{Position: [2]float32{x1, y1}, Color: color},
+// buildVertices expands each textured quad into 6 vertices (two triangles).
+func buildVertices(quads []raster.DrawQuad) []vertex {
+	if len(quads) == 0 {
+		return nil
 	}
+	color := [4]float32{0.95, 0.95, 0.95, 1.0}
+	const aw, ah = float32(atlasWidth), float32(atlasHeight)
+	verts := make([]vertex, 0, 6*len(quads))
+	for _, q := range quads {
+		x0 := float32(q.DstX)
+		y0 := float32(q.DstY)
+		x1 := float32(q.DstX + q.DstW)
+		y1 := float32(q.DstY + q.DstH)
+		u0 := float32(q.SrcX) / aw
+		v0 := float32(q.SrcY) / ah
+		u1 := float32(q.SrcX+q.SrcW) / aw
+		v1 := float32(q.SrcY+q.SrcH) / ah
+		verts = append(verts,
+			vertex{Position: [2]float32{x0, y0}, UV: [2]float32{u0, v0}, Color: color},
+			vertex{Position: [2]float32{x1, y0}, UV: [2]float32{u1, v0}, Color: color},
+			vertex{Position: [2]float32{x0, y1}, UV: [2]float32{u0, v1}, Color: color},
+			vertex{Position: [2]float32{x0, y1}, UV: [2]float32{u0, v1}, Color: color},
+			vertex{Position: [2]float32{x1, y0}, UV: [2]float32{u1, v0}, Color: color},
+			vertex{Position: [2]float32{x1, y1}, UV: [2]float32{u1, v1}, Color: color},
+		)
+	}
+	return verts
 }
 
-func initState(window *glfw.Window, verts []vertex, vertexCount uint32) (*State, error) {
+func initState(window *glfw.Window, verts []vertex, atlas []byte) (*State, error) {
 	s := &State{}
 	s.instance = wgpu.CreateInstance(nil)
 
@@ -240,6 +253,57 @@ func initState(window *glfw.Window, verts []vertex, vertexCount uint32) (*State,
 	}
 	s.surface.Configure(s.adapter, s.device, s.config)
 
+	s.atlasTexture, err = s.device.CreateTexture(&wgpu.TextureDescriptor{
+		Label:         "glyph atlas",
+		Usage:         wgpu.TextureUsageTextureBinding | wgpu.TextureUsageCopyDst,
+		Dimension:     wgpu.TextureDimension2D,
+		Size:          wgpu.Extent3D{Width: atlasWidth, Height: atlasHeight, DepthOrArrayLayers: 1},
+		Format:        wgpu.TextureFormatR8Unorm,
+		MipLevelCount: 1,
+		SampleCount:   1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := s.queue.WriteTexture(
+		&wgpu.ImageCopyTexture{Texture: s.atlasTexture, MipLevel: 0, Aspect: wgpu.TextureAspectAll},
+		atlas,
+		&wgpu.TextureDataLayout{Offset: 0, BytesPerRow: atlasWidth, RowsPerImage: atlasHeight},
+		&wgpu.Extent3D{Width: atlasWidth, Height: atlasHeight, DepthOrArrayLayers: 1},
+	); err != nil {
+		return nil, err
+	}
+	s.atlasView, err = s.atlasTexture.CreateView(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	s.sampler, err = s.device.CreateSampler(&wgpu.SamplerDescriptor{
+		Label:         "atlas sampler",
+		AddressModeU:  wgpu.AddressModeClampToEdge,
+		AddressModeV:  wgpu.AddressModeClampToEdge,
+		AddressModeW:  wgpu.AddressModeClampToEdge,
+		MagFilter:     wgpu.FilterModeLinear,
+		MinFilter:     wgpu.FilterModeLinear,
+		MipmapFilter:  wgpu.MipmapFilterModeNearest,
+		LodMinClamp:   0,
+		LodMaxClamp:   1,
+		MaxAnisotropy: 1,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	u := uniforms{Viewport: [2]float32{float32(width), float32(height)}}
+	s.uniformBuffer, err = s.device.CreateBufferInit(&wgpu.BufferInitDescriptor{
+		Label:    "uniforms",
+		Contents: uniformBytes(&u),
+		Usage:    wgpu.BufferUsageUniform | wgpu.BufferUsageCopyDst,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	shader, err := s.device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
 		Label: "text shader",
 		WGSLDescriptor: &wgpu.ShaderModuleWGSLDescriptor{
@@ -251,18 +315,72 @@ func initState(window *glfw.Window, verts []vertex, vertexCount uint32) (*State,
 	}
 	defer shader.Release()
 
+	s.bindLayout, err = s.device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
+		Label: "text bind group layout",
+		Entries: []wgpu.BindGroupLayoutEntry{
+			{
+				Binding:    0,
+				Visibility: wgpu.ShaderStageVertex | wgpu.ShaderStageFragment,
+				Buffer: wgpu.BufferBindingLayout{
+					Type: wgpu.BufferBindingTypeUniform,
+				},
+			},
+			{
+				Binding:    1,
+				Visibility: wgpu.ShaderStageFragment,
+				Texture: wgpu.TextureBindingLayout{
+					SampleType:    wgpu.TextureSampleTypeFloat,
+					ViewDimension: wgpu.TextureViewDimension2D,
+				},
+			},
+			{
+				Binding:    2,
+				Visibility: wgpu.ShaderStageFragment,
+				Sampler: wgpu.SamplerBindingLayout{
+					Type: wgpu.SamplerBindingTypeFiltering,
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.bindGroup, err = s.device.CreateBindGroup(&wgpu.BindGroupDescriptor{
+		Label:  "text bind group",
+		Layout: s.bindLayout,
+		Entries: []wgpu.BindGroupEntry{
+			{Binding: 0, Buffer: s.uniformBuffer, Offset: 0, Size: uint64(unsafe.Sizeof(uniforms{}))},
+			{Binding: 1, TextureView: s.atlasView},
+			{Binding: 2, Sampler: s.sampler},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.pipelineLayout, err = s.device.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{
+		Label:            "text pipeline layout",
+		BindGroupLayouts: []*wgpu.BindGroupLayout{s.bindLayout},
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	s.pipeline, err = s.device.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{
-		Label: "text pipeline",
+		Label:  "text pipeline",
+		Layout: s.pipelineLayout,
 		Vertex: wgpu.VertexState{
 			Module:     shader,
 			EntryPoint: "vs_main",
 			Buffers: []wgpu.VertexBufferLayout{
 				{
-					ArrayStride: 6 * 4,
+					ArrayStride: uint64(unsafe.Sizeof(vertex{})),
 					StepMode:    wgpu.VertexStepModeVertex,
 					Attributes: []wgpu.VertexAttribute{
 						{Format: wgpu.VertexFormatFloat32x2, Offset: 0, ShaderLocation: 0},
-						{Format: wgpu.VertexFormatFloat32x4, Offset: 8, ShaderLocation: 1},
+						{Format: wgpu.VertexFormatFloat32x2, Offset: 8, ShaderLocation: 1},
+						{Format: wgpu.VertexFormatFloat32x4, Offset: 16, ShaderLocation: 2},
 					},
 				},
 			},
@@ -272,7 +390,7 @@ func initState(window *glfw.Window, verts []vertex, vertexCount uint32) (*State,
 			EntryPoint: "fs_main",
 			Targets: []wgpu.ColorTargetState{{
 				Format:    s.config.Format,
-				Blend:     &wgpu.BlendStateReplace,
+				Blend:     &wgpu.BlendStateAlphaBlending,
 				WriteMask: wgpu.ColorWriteMaskAll,
 			}},
 		},
@@ -289,24 +407,31 @@ func initState(window *glfw.Window, verts []vertex, vertexCount uint32) (*State,
 	}
 
 	s.vertexBuffer, err = s.device.CreateBufferInit(&wgpu.BufferInitDescriptor{
-		Label:    "glyph quad vertices",
+		Label:    "glyph vertices",
 		Contents: wgpu.ToBytes(verts),
 		Usage:    wgpu.BufferUsageVertex,
 	})
 	if err != nil {
 		return nil, err
 	}
-	s.vertexCount = vertexCount
+	s.vertexCount = uint32(len(verts))
 
 	return s, nil
 }
 
+func uniformBytes(u *uniforms) []byte {
+	return unsafe.Slice((*byte)(unsafe.Pointer(u)), unsafe.Sizeof(*u))
+}
+
 func (s *State) resize(width, height int) {
-	if width > 0 && height > 0 {
-		s.config.Width = uint32(width)
-		s.config.Height = uint32(height)
-		s.surface.Configure(s.adapter, s.device, s.config)
+	if width <= 0 || height <= 0 {
+		return
 	}
+	s.config.Width = uint32(width)
+	s.config.Height = uint32(height)
+	s.surface.Configure(s.adapter, s.device, s.config)
+	u := uniforms{Viewport: [2]float32{float32(width), float32(height)}}
+	_ = s.queue.WriteBuffer(s.uniformBuffer, 0, uniformBytes(&u))
 }
 
 func (s *State) render() error {
@@ -335,6 +460,7 @@ func (s *State) render() error {
 		}},
 	})
 	renderPass.SetPipeline(s.pipeline)
+	renderPass.SetBindGroup(0, s.bindGroup, nil)
 	renderPass.SetVertexBuffer(0, s.vertexBuffer, 0, wgpu.WholeSize)
 	renderPass.Draw(s.vertexCount, 1, 0, 0)
 	renderPass.End()
@@ -356,9 +482,37 @@ func (s *State) destroy() {
 		s.vertexBuffer.Release()
 		s.vertexBuffer = nil
 	}
+	if s.uniformBuffer != nil {
+		s.uniformBuffer.Release()
+		s.uniformBuffer = nil
+	}
+	if s.bindGroup != nil {
+		s.bindGroup.Release()
+		s.bindGroup = nil
+	}
+	if s.bindLayout != nil {
+		s.bindLayout.Release()
+		s.bindLayout = nil
+	}
+	if s.pipelineLayout != nil {
+		s.pipelineLayout.Release()
+		s.pipelineLayout = nil
+	}
 	if s.pipeline != nil {
 		s.pipeline.Release()
 		s.pipeline = nil
+	}
+	if s.sampler != nil {
+		s.sampler.Release()
+		s.sampler = nil
+	}
+	if s.atlasView != nil {
+		s.atlasView.Release()
+		s.atlasView = nil
+	}
+	if s.atlasTexture != nil {
+		s.atlasTexture.Release()
+		s.atlasTexture = nil
 	}
 	if s.config != nil {
 		s.config = nil
