@@ -1,0 +1,506 @@
+{
+	"frames": [
+		{
+			"errors": [],
+			"commands": [
+				{
+					"type": "text",
+					"bb": [
+						0,
+						0,
+						120,
+						16
+					],
+					"id": 4156992622,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						255,
+						255,
+						255
+					],
+					"text": "the quick brown",
+					"size": 16
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						16,
+						112,
+						16
+					],
+					"id": 3315845145,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						255,
+						255,
+						255
+					],
+					"text": "fox jumps over",
+					"offset": 16,
+					"size": 16
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						32,
+						96,
+						16
+					],
+					"id": 2090153473,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						255,
+						255,
+						255
+					],
+					"text": "the lazy dog",
+					"offset": 31,
+					"size": 16
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						48,
+						64,
+						16
+					],
+					"id": 1256673958,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						255,
+						255,
+						255
+					],
+					"text": "and then",
+					"offset": 44,
+					"size": 16
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						80,
+						128,
+						16
+					],
+					"id": 1868307343,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						255,
+						255,
+						255
+					],
+					"text": "sleeps  soundly ",
+					"offset": 54,
+					"size": 16
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						71.60064,
+						344,
+						20
+					],
+					"id": 3357909708,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						0,
+						0,
+						255
+					],
+					"text": "the quick brown fox jumps over the lazy dog",
+					"lineH": 20
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						91.60064,
+						64,
+						20
+					],
+					"id": 2534391965,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						0,
+						0,
+						255
+					],
+					"text": "and then",
+					"offset": 44,
+					"lineH": 20
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						131.60065,
+						128,
+						20
+					],
+					"id": 78715874,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						0,
+						0,
+						255
+					],
+					"text": "sleeps  soundly ",
+					"offset": 54,
+					"lineH": 20
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						139.20128,
+						359,
+						16
+					],
+					"id": 3432759737,
+					"z": 0,
+					"user": 0,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "the quick brown fox jumps over the lazy",
+					"font": 2,
+					"spacing": 1
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						155.20128,
+						28,
+						16
+					],
+					"id": 3730466102,
+					"z": 0,
+					"user": 0,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "dog",
+					"offset": 40,
+					"font": 2,
+					"spacing": 1
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						171.20128,
+						74,
+						16
+					],
+					"id": 3563966825,
+					"z": 0,
+					"user": 0,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "and then",
+					"offset": 44,
+					"font": 2,
+					"spacing": 1
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						203.20128,
+						146,
+						16
+					],
+					"id": 2172234626,
+					"z": 0,
+					"user": 0,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "sleeps  soundly ",
+					"offset": 54,
+					"font": 2,
+					"spacing": 1
+				},
+				{
+					"type": "text",
+					"bb": [
+						24,
+						208.80191,
+						152,
+						16
+					],
+					"id": 2371537388,
+					"z": 0,
+					"user": 0,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "the quick brown fox",
+					"size": 12
+				},
+				{
+					"type": "text",
+					"bb": [
+						8,
+						224.80191,
+						184,
+						16
+					],
+					"id": 2593711208,
+					"z": 0,
+					"user": 0,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "jumps over the lazy dog",
+					"offset": 20,
+					"size": 12
+				},
+				{
+					"type": "text",
+					"bb": [
+						68,
+						240.80191,
+						64,
+						16
+					],
+					"id": 2832564449,
+					"z": 0,
+					"user": 0,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "and then",
+					"offset": 44,
+					"size": 12
+				},
+				{
+					"type": "text",
+					"bb": [
+						36,
+						272.8019,
+						128,
+						16
+					],
+					"id": 3059358686,
+					"z": 0,
+					"user": 0,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "sleeps  soundly ",
+					"offset": 54,
+					"size": 12
+				},
+				{
+					"type": "text",
+					"bb": [
+						48,
+						278.40256,
+						152,
+						16
+					],
+					"id": 1235377871,
+					"z": 0,
+					"user": 5,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "the quick brown fox"
+				},
+				{
+					"type": "text",
+					"bb": [
+						16,
+						294.40256,
+						184,
+						16
+					],
+					"id": 4169809068,
+					"z": 0,
+					"user": 5,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "jumps over the lazy dog",
+					"offset": 20
+				},
+				{
+					"type": "text",
+					"bb": [
+						136,
+						310.40256,
+						64,
+						16
+					],
+					"id": 773105588,
+					"z": 0,
+					"user": 5,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "and then",
+					"offset": 44
+				},
+				{
+					"type": "text",
+					"bb": [
+						72,
+						342.40256,
+						128,
+						16
+					],
+					"id": 1550582898,
+					"z": 0,
+					"user": 5,
+					"color": [
+						0,
+						0,
+						0,
+						0
+					],
+					"text": "sleeps  soundly ",
+					"offset": 54
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						348.0032,
+						168,
+						16
+					],
+					"id": 1341730005,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						255,
+						255,
+						255
+					],
+					"text": "supercalifragilistic ",
+					"size": 16
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						364.0032,
+						32,
+						16
+					],
+					"id": 1906405413,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						255,
+						255,
+						255
+					],
+					"text": "word",
+					"offset": 21,
+					"size": 16
+				},
+				{
+					"type": "text",
+					"bb": [
+						0,
+						384.0032,
+						40,
+						16
+					],
+					"id": 4250794166,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						255,
+						255,
+						255
+					],
+					"text": "short",
+					"size": 16
+				},
+				{
+					"type": "text",
+					"bb": [
+						40,
+						384.0032,
+						248,
+						16
+					],
+					"id": 451974066,
+					"z": 0,
+					"user": 0,
+					"color": [
+						255,
+						255,
+						255,
+						255
+					],
+					"text": "another text sibling that wraps",
+					"size": 16
+				}
+			],
+			"query": []
+		}
+	]
+}

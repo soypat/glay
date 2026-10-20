@@ -1,0 +1,119 @@
+{
+	"maxElements": 128,
+	"layout": {
+		"w": 600,
+		"h": 400
+	},
+	"measure": {
+		"charW": 8,
+		"lineH": 16
+	},
+	"frames": [
+		{
+			"ops": [
+				{
+					"op": "open",
+					"sid": "Root",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "grow"
+							},
+							"h": {
+								"type": "grow"
+							},
+							"gap": 5
+						}
+					}
+				},
+				{
+					"op": "open",
+					"sid": "Img",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 100,
+								"max": 100
+							}
+						},
+						"bg": [
+							255,
+							255,
+							255,
+							128
+						],
+						"radius": [
+							1,
+							2,
+							3,
+							4
+						],
+						"aspect": 2,
+						"image": 7
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "Wide",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "grow"
+							},
+							"h": {
+								"type": "fixed",
+								"min": 30,
+								"max": 30
+							}
+						},
+						"aspect": 0.5
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "Custom",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 40,
+								"max": 40
+							},
+							"h": {
+								"type": "fixed",
+								"min": 40,
+								"max": 40
+							}
+						},
+						"bg": [
+							1,
+							2,
+							3,
+							255
+						],
+						"custom": 9,
+						"user": 4
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "close"
+				}
+			],
+			"query": [
+				"Img",
+				"Wide",
+				"Custom"
+			]
+		}
+	]
+}

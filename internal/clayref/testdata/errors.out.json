@@ -1,0 +1,104 @@
+{
+	"frames": [
+		{
+			"errors": [
+				"duplicate_id",
+				"percentage_over_1",
+				"floating_container_parent_not_found"
+			],
+			"commands": [
+				{
+					"type": "rectangle",
+					"bb": [
+						0,
+						0,
+						10,
+						10
+					],
+					"id": 1359004680,
+					"z": 0,
+					"user": 0,
+					"color": [
+						1,
+						1,
+						1,
+						255
+					],
+					"radius": [
+						0,
+						0,
+						0,
+						0
+					]
+				},
+				{
+					"type": "rectangle",
+					"bb": [
+						10,
+						0,
+						20,
+						20
+					],
+					"id": 1359004680,
+					"z": 0,
+					"user": 0,
+					"color": [
+						2,
+						2,
+						2,
+						255
+					],
+					"radius": [
+						0,
+						0,
+						0,
+						0
+					]
+				},
+				{
+					"type": "rectangle",
+					"bb": [
+						30,
+						0,
+						900,
+						800
+					],
+					"id": 4186809028,
+					"z": 0,
+					"user": 0,
+					"color": [
+						3,
+						3,
+						3,
+						255
+					],
+					"radius": [
+						0,
+						0,
+						0,
+						0
+					]
+				}
+			],
+			"query": [
+				{
+					"id": 1359004680,
+					"found": true,
+					"bb": [
+						10,
+						0,
+						20,
+						20
+					],
+					"scrollFound": false,
+					"scrollDims": [
+						0,
+						0,
+						0,
+						0
+					]
+				}
+			]
+		}
+	]
+}

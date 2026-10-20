@@ -25,115 +25,94 @@ const (
 
 func main() {
 	var ctx glay.Context
-	ctx.MaxElementCount = 128
 	if err := ctx.Initialize(glay.Config{
-		Layout: glay.Dimensions{Width: canvasW, Height: canvasH},
+		Layout:          glay.Dimensions{Width: canvasW, Height: canvasH},
+		MaxElementCount: 128,
 	}); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := ctx.BeginLayout(); err != nil {
-		log.Fatal(err)
-	}
+	ctx.BeginLayout()
 
-	grow := func() glay.SizingAxis { return glay.NewSizingAxis(glay.SizingGrow, 0, 0) }
-	fixed := func(v float32) glay.SizingAxis { return glay.NewSizingAxis(glay.SizingFixed, v) }
+	grow := glay.SizingAxisGrow(0, 0)
+	fixed := glay.SizingAxisFixed
 
 	// Root container — dark background, vertical stack with padding.
-	ctx.Clay(glay.ElementDeclaration{
-		ID:              glay.ID("Root"),
+	ctx.Clay(glay.ID("Root"), &glay.ElementDeclaration{
 		BackgroundColor: glay.Color{R: 30, G: 30, B: 30, A: 255},
 		Layout: glay.LayoutConfig{
 			LayoutDirection: glay.TopToBottom,
-			Sizing:          glay.Sizing{Width: grow(), Height: grow()},
+			Sizing:          glay.Sizing{Width: grow, Height: grow},
 			Padding:         glay.PaddingAll(12),
 			ChildGap:        8,
 		},
-	}, func(ctx *glay.Context) error {
+	}, func(ctx *glay.Context) {
 		// Header row.
-		ctx.Clay(glay.ElementDeclaration{
-			ID:              glay.ID("Header"),
+		ctx.Clay(glay.ID("Header"), &glay.ElementDeclaration{
 			BackgroundColor: glay.Color{R: 50, G: 50, B: 70, A: 255},
 			Layout: glay.LayoutConfig{
 				LayoutDirection: glay.LeftToRight,
-				Sizing:          glay.Sizing{Width: grow(), Height: fixed(48)},
+				Sizing:          glay.Sizing{Width: grow, Height: fixed(48)},
 				Padding:         glay.PaddingAll(8),
 				ChildGap:        8,
 			},
-		}, func(ctx *glay.Context) error {
+		}, func(ctx *glay.Context) {
 			// Two colored boxes in the header.
-			ctx.Clay(glay.ElementDeclaration{
-				ID:              glay.ID("HeaderLeft"),
+			ctx.Clay(glay.ID("HeaderLeft"), &glay.ElementDeclaration{
 				BackgroundColor: glay.Color{R: 90, G: 200, B: 170, A: 255},
-				Layout: glay.LayoutConfig{
-					Sizing: glay.Sizing{Width: fixed(80), Height: grow()},
-				},
+				Layout:          glay.LayoutConfig{Sizing: glay.Sizing{Width: fixed(80), Height: grow}},
 			})
-			ctx.Clay(glay.ElementDeclaration{
-				ID:              glay.ID("HeaderRight"),
+			ctx.Clay(glay.ID("HeaderRight"), &glay.ElementDeclaration{
 				BackgroundColor: glay.Color{R: 200, G: 150, B: 80, A: 255},
-				Layout: glay.LayoutConfig{
-					Sizing: glay.Sizing{Width: fixed(80), Height: grow()},
-				},
+				Layout:          glay.LayoutConfig{Sizing: glay.Sizing{Width: fixed(80), Height: grow}},
 			})
-			return nil
 		})
 
 		// Content area — horizontal split: sidebar + main.
-		ctx.Clay(glay.ElementDeclaration{
-			ID: glay.ID("Content"),
+		ctx.Clay(glay.ID("Content"), &glay.ElementDeclaration{
 			Layout: glay.LayoutConfig{
 				LayoutDirection: glay.LeftToRight,
-				Sizing:          glay.Sizing{Width: grow(), Height: grow()},
+				Sizing:          glay.Sizing{Width: grow, Height: grow},
 				ChildGap:        8,
 			},
-		}, func(ctx *glay.Context) error {
+		}, func(ctx *glay.Context) {
 			// Sidebar — vertical stack of "menu items".
-			ctx.Clay(glay.ElementDeclaration{
-				ID:              glay.ID("Sidebar"),
+			ctx.Clay(glay.ID("Sidebar"), &glay.ElementDeclaration{
 				BackgroundColor: glay.Color{R: 45, G: 45, B: 55, A: 255},
 				Layout: glay.LayoutConfig{
 					LayoutDirection: glay.TopToBottom,
-					Sizing:          glay.Sizing{Width: fixed(120), Height: grow()},
+					Sizing:          glay.Sizing{Width: fixed(120), Height: grow},
 					Padding:         glay.PaddingAll(8),
 					ChildGap:        6,
 				},
-			}, func(ctx *glay.Context) error {
+			}, func(ctx *glay.Context) {
 				colors := []glay.Color{
 					{R: 220, G: 80, B: 80, A: 255},
 					{R: 80, G: 180, B: 220, A: 255},
 					{R: 140, G: 220, B: 80, A: 255},
 				}
 				for i, c := range colors {
-					ctx.Clay(glay.ElementDeclaration{
-						ID:              glay.ID(fmt.Sprintf("MenuItem%d", i)),
+					// IDI derives IDs from a label and index without formatting strings.
+					ctx.Clay(glay.IDI("MenuItem", uint32(i)), &glay.ElementDeclaration{
 						BackgroundColor: c,
-						Layout: glay.LayoutConfig{
-							Sizing: glay.Sizing{Width: grow(), Height: fixed(28)},
-						},
+						Layout:          glay.LayoutConfig{Sizing: glay.Sizing{Width: grow, Height: fixed(28)}},
 					})
 				}
-				return nil
 			})
 
 			// Main panel.
-			ctx.Clay(glay.ElementDeclaration{
-				ID:              glay.ID("MainPanel"),
+			ctx.Clay(glay.ID("MainPanel"), &glay.ElementDeclaration{
 				BackgroundColor: glay.Color{R: 55, G: 55, B: 65, A: 255},
-				Layout: glay.LayoutConfig{
-					Sizing: glay.Sizing{Width: grow(), Height: grow()},
-				},
+				Layout:          glay.LayoutConfig{Sizing: glay.Sizing{Width: grow, Height: grow}},
 			})
-			return nil
 		})
 
 		// Footer with border.
-		ctx.Clay(glay.ElementDeclaration{
-			ID:              glay.ID("Footer"),
+		ctx.Clay(glay.ID("Footer"), &glay.ElementDeclaration{
 			BackgroundColor: glay.Color{R: 50, G: 50, B: 70, A: 255},
 			Layout: glay.LayoutConfig{
 				LayoutDirection: glay.LeftToRight,
-				Sizing:          glay.Sizing{Width: grow(), Height: fixed(32)},
+				Sizing:          glay.Sizing{Width: grow, Height: fixed(32)},
 				Padding:         glay.PaddingAll(4),
 				ChildGap:        8,
 			},
@@ -141,24 +120,16 @@ func main() {
 				Color: glay.Color{R: 200, G: 200, B: 50, A: 255},
 				Width: glay.BorderWidth{Left: 2, Right: 2, Top: 2, Bottom: 2, BetweenChildren: 2},
 			},
-		}, func(ctx *glay.Context) error {
-			ctx.Clay(glay.ElementDeclaration{
-				ID:              glay.ID("FooterLeft"),
+		}, func(ctx *glay.Context) {
+			ctx.Clay(glay.ID("FooterLeft"), &glay.ElementDeclaration{
 				BackgroundColor: glay.Color{R: 80, G: 80, B: 120, A: 255},
-				Layout: glay.LayoutConfig{
-					Sizing: glay.Sizing{Width: grow(), Height: grow()},
-				},
+				Layout:          glay.LayoutConfig{Sizing: glay.Sizing{Width: grow, Height: grow}},
 			})
-			ctx.Clay(glay.ElementDeclaration{
-				ID:              glay.ID("FooterRight"),
+			ctx.Clay(glay.ID("FooterRight"), &glay.ElementDeclaration{
 				BackgroundColor: glay.Color{R: 120, G: 80, B: 80, A: 255},
-				Layout: glay.LayoutConfig{
-					Sizing: glay.Sizing{Width: grow(), Height: grow()},
-				},
+				Layout:          glay.LayoutConfig{Sizing: glay.Sizing{Width: grow, Height: grow}},
 			})
-			return nil
 		})
-		return nil
 	})
 
 	cmds, err := ctx.EndLayout()
@@ -169,13 +140,14 @@ func main() {
 	// Render to image.
 	img := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
 	for _, cmd := range cmds {
-		switch data := cmd.RenderData.(type) {
-		case *glay.RectangleRenderData:
-			drawRect(img, cmd.BoundingBox, data.BackgroundColor)
-		case *glay.BorderRenderData:
-			bb := cmd.BoundingBox
+		bb := cmd.BoundingBox
+		data := &cmd.RenderData
+		switch cmd.CommandType {
+		case glay.RenderCommandTypeRectangle:
+			drawRect(img, bb, data.Color)
+		case glay.RenderCommandTypeBorder:
 			c := data.Color
-			w := data.Width
+			w := data.BorderWidth
 			// Top
 			drawRect(img, glay.BoundingBox{Vector2: glay.Vector2{X: bb.X, Y: bb.Y}, Dimensions: glay.Dimensions{Width: bb.Width, Height: float32(w.Top)}}, c)
 			// Bottom

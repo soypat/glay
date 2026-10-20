@@ -1,0 +1,258 @@
+{
+	"maxElements": 128,
+	"layout": {
+		"w": 600,
+		"h": 400
+	},
+	"measure": {
+		"charW": 8,
+		"lineH": 16
+	},
+	"frames": [
+		{
+			"ops": [
+				{
+					"op": "open",
+					"sid": "Root",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "grow"
+							},
+							"h": {
+								"type": "grow"
+							},
+							"gap": 4,
+							"dir": "ttb"
+						}
+					}
+				},
+				{
+					"op": "open",
+					"sid": "Words",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 150,
+								"max": 150
+							},
+							"h": {
+								"type": "fit"
+							}
+						}
+					}
+				},
+				{
+					"op": "text",
+					"text": "the quick brown fox jumps over the lazy dog\nand then\n\nsleeps  soundly ",
+					"cfg": {
+						"color": [
+							255,
+							255,
+							255,
+							255
+						],
+						"size": 16
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "Newlines",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 150,
+								"max": 150
+							},
+							"h": {
+								"type": "fit"
+							}
+						}
+					}
+				},
+				{
+					"op": "text",
+					"text": "the quick brown fox jumps over the lazy dog\nand then\n\nsleeps  soundly ",
+					"cfg": {
+						"color": [
+							255,
+							0,
+							0,
+							255
+						],
+						"lineH": 20,
+						"wrap": "newlines"
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "None",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 150,
+								"max": 150
+							},
+							"h": {
+								"type": "fit"
+							}
+						}
+					}
+				},
+				{
+					"op": "text",
+					"text": "the quick brown fox jumps over the lazy dog\nand then\n\nsleeps  soundly ",
+					"cfg": {
+						"font": 2,
+						"spacing": 1,
+						"wrap": "none"
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "Center",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 200,
+								"max": 200
+							},
+							"h": {
+								"type": "fit"
+							}
+						}
+					}
+				},
+				{
+					"op": "text",
+					"text": "the quick brown fox jumps over the lazy dog\nand then\n\nsleeps  soundly ",
+					"cfg": {
+						"size": 12,
+						"align": "center"
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "Right",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 200,
+								"max": 200
+							},
+							"h": {
+								"type": "fit"
+							}
+						}
+					}
+				},
+				{
+					"op": "text",
+					"text": "the quick brown fox jumps over the lazy dog\nand then\n\nsleeps  soundly ",
+					"cfg": {
+						"align": "right",
+						"user": 5
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "Long",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 40,
+								"max": 40
+							},
+							"h": {
+								"type": "fit"
+							}
+						}
+					}
+				},
+				{
+					"op": "text",
+					"text": "supercalifragilistic word",
+					"cfg": {
+						"color": [
+							255,
+							255,
+							255,
+							255
+						],
+						"size": 16
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "Grow",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "grow"
+							},
+							"h": {
+								"type": "fit"
+							}
+						}
+					}
+				},
+				{
+					"op": "text",
+					"text": "short",
+					"cfg": {
+						"color": [
+							255,
+							255,
+							255,
+							255
+						],
+						"size": 16
+					}
+				},
+				{
+					"op": "text",
+					"text": "another text sibling that wraps",
+					"cfg": {
+						"color": [
+							255,
+							255,
+							255,
+							255
+						],
+						"size": 16
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "close"
+				}
+			]
+		}
+	]
+}

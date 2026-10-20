@@ -1,0 +1,344 @@
+{
+	"maxElements": 128,
+	"layout": {
+		"w": 600,
+		"h": 400
+	},
+	"measure": {
+		"charW": 8,
+		"lineH": 16
+	},
+	"frames": [
+		{
+			"ops": [
+				{
+					"op": "open",
+					"sid": "Root",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "grow"
+							},
+							"h": {
+								"type": "grow"
+							},
+							"gap": 4,
+							"dir": "ttb"
+						}
+					}
+				},
+				{
+					"op": "open",
+					"sid": "Grow",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "grow"
+							},
+							"h": {
+								"type": "fixed",
+								"min": 30,
+								"max": 30
+							},
+							"gap": 5
+						}
+					}
+				},
+				{
+					"op": "open",
+					"sid": "G1",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "grow"
+							},
+							"h": {
+								"type": "grow"
+							}
+						},
+						"bg": [
+							255,
+							0,
+							0,
+							255
+						]
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "G2",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "grow",
+								"max": 50
+							},
+							"h": {
+								"type": "grow"
+							}
+						},
+						"bg": [
+							0,
+							255,
+							0,
+							255
+						]
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "G3",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "grow",
+								"min": 200
+							},
+							"h": {
+								"type": "grow"
+							}
+						},
+						"bg": [
+							0,
+							0,
+							255,
+							255
+						]
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "P",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "percent",
+								"pct": 0.2
+							},
+							"h": {
+								"type": "percent",
+								"pct": 0.5
+							}
+						},
+						"bg": [
+							255,
+							255,
+							0,
+							255
+						]
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "Compress",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 200,
+								"max": 200
+							},
+							"h": {
+								"type": "fit"
+							},
+							"gap": 4
+						}
+					}
+				},
+				{
+					"op": "open",
+					"sid": "C1",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fit"
+							},
+							"h": {
+								"type": "fixed",
+								"min": 20,
+								"max": 20
+							}
+						}
+					}
+				},
+				{
+					"op": "text",
+					"text": "hello world wraps",
+					"cfg": {
+						"color": [
+							255,
+							255,
+							255,
+							255
+						],
+						"size": 16
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "C2",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fit",
+								"min": 30
+							},
+							"h": {
+								"type": "fixed",
+								"min": 20,
+								"max": 20
+							}
+						},
+						"bg": [
+							0,
+							255,
+							255,
+							255
+						]
+					}
+				},
+				{
+					"op": "open",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 150,
+								"max": 150
+							},
+							"h": {
+								"type": "fixed",
+								"min": 10,
+								"max": 10
+							}
+						}
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "C3",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 100,
+								"max": 100
+							},
+							"h": {
+								"type": "fixed",
+								"min": 20,
+								"max": 20
+							}
+						},
+						"bg": [
+							255,
+							0,
+							255,
+							255
+						]
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "open",
+					"sid": "Fit",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fit",
+								"max": 100
+							},
+							"h": {
+								"type": "fit",
+								"min": 50
+							},
+							"padding": [
+								3,
+								3,
+								3,
+								3
+							],
+							"dir": "ttb"
+						},
+						"bg": [
+							9,
+							9,
+							9,
+							255
+						]
+					}
+				},
+				{
+					"op": "open",
+					"decl": {
+						"layout": {
+							"w": {
+								"type": "fixed",
+								"min": 150,
+								"max": 150
+							},
+							"h": {
+								"type": "fixed",
+								"min": 10,
+								"max": 10
+							}
+						},
+						"bg": [
+							1,
+							2,
+							3,
+							255
+						]
+					}
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "close"
+				},
+				{
+					"op": "close"
+				}
+			],
+			"query": [
+				"G1",
+				"G2",
+				"G3",
+				"P",
+				"C1",
+				"C2",
+				"C3"
+			]
+		}
+	]
+}

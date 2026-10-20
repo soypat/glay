@@ -5,7 +5,7 @@ go.work.sum
 *.test
 # Dependency directories after running `go mod vendor`
 vendor/
-
+agents.md
 # Binaries for programs and plugins
 *.elf
 *.uf2
@@ -48,3 +48,6 @@ glay-webgpu
 
 # If running a python script.
 */__pycache__/*
+
+# Reference fixtures for differential testing against clay.
+!internal/clayref/testdata/*.json

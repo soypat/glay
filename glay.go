@@ -1,199 +1,61 @@
 package glay
 
-//go:generate stringer -linecomment -output=stringers.go -type=ElementConfigType,LayoutDirection,LayoutAlignmentX,LayoutAlignmentY,SizingType,TextElementConfigWrapMode,TextAlignment,FloatingAttachPointType,MousePointerCaptureMode,FloatingAttachToElement,RenderCommandType,Error
+//go:generate stringer -linecomment -output=stringers.go -type=LayoutDirection,LayoutAlignmentX,LayoutAlignmentY,SizingType,TextElementConfigWrapMode,TextAlignment,FloatingAttachPointType,PointerCaptureMode,FloatingAttachToElement,FloatingClipToElement,RenderCommandType,PointerDataInteractionState,Error
 
 // Internal clay types to better match the source and also
 // allow easily switching between a 32-bit implementation or 64-bit.
 type (
-	uintn    = uint32
-	intn     = int32
-	floatn   = float32
-	strslice = []byte // Non-owning string slice
+	uintn  = uint32
+	intn   = int32
+	floatn = float32
 )
 
-func ID(name string) ElementID {
-	return hashString(name, 0, 0)
-}
+// ID returns the element ID for label, equivalent to CLAY_ID/CLAY_SID.
+func ID(label string) ElementID { return hashString(label, 0) }
 
-type Context struct {
-	MaxElementCount               intn
-	MaxMeasureTextCacheWordCount  intn
-	WarningsEnabled               bool
-	PointerInfo                   MousePointerData
-	LayoutDimensions              Dimensions
-	DynamicElementIndexBaseHash   ElementID
-	DynamicElementIndex           uintn
-	DebugModeEnabled              bool
-	DisableCulling                bool
-	ExternalScrollHandlingEnabled bool
-	DebugSelectElementID          uintn
-	Generation                    uintn
-	MeasureTextFunction           func(text string, config *TextElementConfig, userData any) Dimensions
-	MeasureTextUserData           any
-	QueryScrollOffsetFunction func(elementID uint32, userData any) Vector2
-	QueryScrollOffsetUserData any
-	// Layout elements / render commands
-	LayoutElements              []LayoutElement
-	renderCommands              []RenderCommand
-	OpenLayoutElementStack      []intn
-	LayoutElementChildren       []intn
-	LayoutElementChildrenBuffer []intn
-	TextElementData             []TextElementData
-	AspectRatioElementIndexes   []intn
-	ReusableElementIndexBuffer  []intn
-	LayoutElementClipElementIDs []intn
-	// Configs
-	LayoutConfigs             []LayoutConfig
-	ElementConfigs            []ElementConfig
-	TextElementConfigs        []TextElementConfig
-	AspectRatioElementConfigs []AspectRatioElementConfig
-	ImageElementConfigs       []ImageElementConfig
-	FloatingElementConfigs    []FloatingElementConfig
-	ClipElementConfigs        []ClipElementConfig
-	CustomElementConfigs      []any
-	BorderElementConfigs      []BorderElementConfig
-	SharedElementConfigs      []SharedElementConfig
-	// Misc Data Structures.
-	LayoutElementIDStrings             []string
-	WrappedTextLines                   []WrappedTextLine
-	LayoutElementTreeNodes1            []layoutElementTreeNode
-	LayoutElementTreeRoots             []layoutElementTreeRoot
-	measureTextHashMapInternal         []measureTextCacheItem
-	MeasureTextHashMapInternalFreelist []intn
-	measureTextHashMap                 []intn
-	measuredWords                      []measuredWord
-	measuredWordsFreeList              []intn
-	openClipElementStack               []intn
-	PointerOverIDs                     []ElementID
-	scrollContainerDatas               []scrollContainerDataInternal
-	TreeNodeVisited                    []bool
-	DynamicStringData                  []byte
-	debugElementData                   []debugElementData
-	GoHash                             map[uintn]*LayoutElementHashMapItem
-	logger
-}
+// IDI returns the element ID for label and index, equivalent to CLAY_IDI/CLAY_SIDI.
+// Use it instead of formatting index into the label to avoid allocating.
+func IDI(label string, index uint32) ElementID { return hashStringWithOffset(label, index, 0) }
 
-type SharedElementConfig struct {
-	BackgroundColor Color
-	CornerRadius    CornerRadius
-	UserData        any
-}
+// IDFromUint returns an element ID with the given raw hash value. id must not be zero,
+// which is reserved for "no ID". Useful when element identity is managed externally.
+func IDFromUint(id uint32) ElementID { return ElementID{ID: id} }
 
-type ElementConfigType uint8
-
-const (
-	ElementConfigTypeNone        ElementConfigType = iota // element config none
-	ElementConfigTypeBorder                               // element config border
-	ElementConfigTypeFloating                             // element config floating
-	ElementConfigTypeClip                                 // element config clip
-	ElementConfigTypeAspectRatio                          // element config aspect ratio
-	ElementConfigTypeImage                                // element config image
-	ElementConfigTypeText                                 // element config text
-	ElementConfigTypeCustom                               // element config custom
-	ElementConfigTypeShared                               // element config shared
-)
-
-func GetElementConfigType(a any) (Type ElementConfigType) {
-	switch a.(type) {
-	case *BorderElementConfig:
-		Type = ElementConfigTypeBorder
-	case *FloatingElementConfig:
-		Type = ElementConfigTypeFloating
-	case *ClipElementConfig:
-		Type = ElementConfigTypeClip
-	case *AspectRatioElementConfig:
-		Type = ElementConfigTypeAspectRatio
-	case *ImageElementConfig:
-		Type = ElementConfigTypeImage
-	case *TextElementConfig:
-		Type = ElementConfigTypeText
-	case *SharedElementConfig:
-		Type = ElementConfigTypeShared
-	default:
-		panic("invalid element Config, make sure it is pointer type")
-	}
-	return Type
-}
-
-type ElementConfig struct {
-	Type   ElementConfigType
-	Config any
-}
-
-type WrappedTextLine struct {
-	Dimensions Dimensions
-	Line       string
-}
-type TextElementData struct {
-	Text                string
-	PreferredDimensions Dimensions
-	ElementIndex        intn
-	WrappedLines        []WrappedTextLine
-}
-type LayoutElement struct {
-	ChildrenOrTextContent any // Is either []intn when children or TextContent.
-	Dimensions            Dimensions
-	MinDimensions         Dimensions
-	LayoutConfig          *LayoutConfig
-	ElementConfigs        []ElementConfig
-	ID                    uintn
-}
-
-type layoutElementTreeNode struct {
-	layoutElement   *LayoutElement
-	position        Vector2
-	NextChildOffset Vector2
-}
-type layoutElementTreeRoot struct {
-	LayoutElementIndex intn
-	ParentID           uintn
-	ClipElementID      uintn
-	Zindex             int16
-	PointerOffset      Vector2
-}
-type LayoutElementHashMapItem struct {
-	BoundingBox     BoundingBox
-	ElementID       ElementID
-	LayoutElement   *LayoutElement
-	OnHover         func(_ ElementID, _ MousePointerData, userData any)
-	OnHoverUserData any
-	NextIndex       intn
-	Generation      uintn
-	IDAlias         uintn
-}
-
-func (hmi LayoutElementHashMapItem) isdefault() bool {
-	return hmi.BoundingBox == BoundingBox{} && hmi.IDAlias == 0 && hmi.Generation == 0
-}
-
+// Dimensions are a width and height.
 type Dimensions struct {
 	Width, Height floatn
 }
 
+// Vector2 is a 2D point or offset.
+type Vector2 struct {
+	X, Y floatn
+}
+
+// Color is conventionally represented as 0-255 per channel, but interpretation is up to the renderer.
 type Color struct {
 	R, G, B, A floatn
 }
 
+// BoundingBox is an axis aligned rectangle with its position relative to the root of the layout.
 type BoundingBox struct {
 	Vector2
 	Dimensions
 }
 
-type Vector2 struct {
-	X, Y floatn
-}
-
+// ElementID is a hashed element identifier, primarily created with [ID] and [IDI].
 type ElementID struct {
-	ID       uintn
-	Offset   uintn
-	BaseID   uintn
-	StringID string
+	ID       uintn  // The resulting hash generated from the other fields.
+	Offset   uintn  // A numerical offset applied after computing the hash from StringID.
+	BaseID   uintn  // A base hash value to start from, for example the parent element ID for local IDs.
+	StringID string // The string ID that was hashed.
 }
 
+// CornerRadius controls the corner rounding of rectangles, borders and images.
 type CornerRadius struct {
 	TopLeft, TopRight, BottomLeft, BottomRight floatn
 }
 
+// LayoutDirection controls the direction in which child elements are laid out.
 type LayoutDirection uint8
 
 const (
@@ -201,6 +63,7 @@ const (
 	TopToBottom                        // top to bottom
 )
 
+// LayoutAlignmentX controls the alignment of child elements along the x axis.
 type LayoutAlignmentX uint8
 
 const (
@@ -209,6 +72,7 @@ const (
 	AlignXCenter                         // align x center
 )
 
+// LayoutAlignmentY controls the alignment of child elements along the y axis.
 type LayoutAlignmentY uint8
 
 const (
@@ -217,6 +81,7 @@ const (
 	AlignYCenter                         // align y center
 )
 
+// SizingType controls how an element takes up space inside its parent container.
 type SizingType uint8
 
 const (
@@ -226,90 +91,76 @@ const (
 	SizingFixed                     // sizing fixed
 )
 
+// ChildAlignment controls how child elements are aligned on each axis.
 type ChildAlignment struct {
 	X LayoutAlignmentX
 	Y LayoutAlignmentY
 }
 
+// SizingMinMax holds the minimum and maximum size in pixels an element may take on an axis.
 type SizingMinMax struct {
 	Min, Max floatn
 }
 
+// SizingAxis controls the sizing of an element along one axis.
+//
+// Clay stores the percentage in a union with MinMax. glay mirrors this: for
+// [SizingPercent] the percentage is stored in MinMax.Min. Use the constructors
+// [SizingAxisPercent] et al. instead of setting fields directly.
 type SizingAxis struct {
-	MinMax  SizingMinMax
-	Percent floatn
-	Type    SizingType
+	MinMax SizingMinMax
+	Type   SizingType
 }
 
+// Percent returns the percentage of a [SizingPercent] axis.
+func (ax SizingAxis) Percent() floatn { return ax.MinMax.Min }
+
+// SizingAxisFit wraps tightly to the size of the element's contents, clamped to min and max (0 means unbounded).
+func SizingAxisFit(min, max floatn) SizingAxis {
+	return SizingAxis{MinMax: SizingMinMax{Min: min, Max: max}, Type: SizingFit}
+}
+
+// SizingAxisGrow expands to fill available space in the parent, clamped to min and max (0 means unbounded).
+func SizingAxisGrow(min, max floatn) SizingAxis {
+	return SizingAxis{MinMax: SizingMinMax{Min: min, Max: max}, Type: SizingGrow}
+}
+
+// SizingAxisFixed sizes the axis to exactly size pixels.
+func SizingAxisFixed(size floatn) SizingAxis {
+	return SizingAxis{MinMax: SizingMinMax{Min: size, Max: size}, Type: SizingFixed}
+}
+
+// SizingAxisPercent sizes the axis to percent (0..1) of the parent's axis size minus padding and child gaps.
+func SizingAxisPercent(percent floatn) SizingAxis {
+	return SizingAxis{MinMax: SizingMinMax{Min: percent}, Type: SizingPercent}
+}
+
+// Sizing controls the sizing of an element along both axes.
 type Sizing struct {
 	Width  SizingAxis
 	Height SizingAxis
 }
 
-func NewSizingAxis(kind SizingType, a ...floatn) (ax SizingAxis) {
-	ax.Type = kind
-	need1Arg := kind == SizingPercent || kind == SizingFixed
-	if len(a) == 0 || len(a) > 2 || need1Arg != (len(a) == 1) {
-		panic("invalid number of arguments")
-	} else if kind == SizingPercent {
-		ax.Percent = a[0]
-		return ax
-	} else if kind == SizingFixed {
-		ax.MinMax = SizingMinMax{Min: a[0], Max: a[0]}
-		return ax
-	}
-	ax.MinMax.Min = a[0]
-	ax.MinMax.Max = a[1]
-	return ax
-}
-
-func (sz Sizing) SizingAxis(xaxis bool) SizingAxis {
-	if xaxis {
-		return sz.Width
-	}
-	return sz.Height
-}
-
-func (sz Sizing) Clamp(d Dimensions) Dimensions {
-	d.Height = sz.ClampHeight(d.Height)
-	d.Width = sz.ClampWidth(d.Width)
-	return d
-}
-func (sz Sizing) ClampWidth(w floatn) floatn {
-	return clamp(sz.Width.MinMax.Min, sz.Width.MinMax.Max, w)
-}
-func (sz Sizing) ClampHeight(h floatn) floatn {
-	return clamp(sz.Height.MinMax.Min, sz.Height.MinMax.Max, h)
-}
-
+// Padding is a gap in pixels between the bounding box of an element and where its children are placed.
 type Padding struct {
 	Left, Right, Top, Bottom uint16
 }
 
+// PaddingAll returns padding with all sides set to padding.
 func PaddingAll(padding uint16) Padding {
-	return Padding{
-		Left: padding, Right: padding, Top: padding, Bottom: padding,
-	}
+	return Padding{Left: padding, Right: padding, Top: padding, Bottom: padding}
 }
 
-func (pd Padding) Vertical() uint16   { return pd.Top + pd.Bottom }
-func (pd Padding) Horizontal() uint16 { return pd.Left + pd.Right }
-
-func (pd Padding) SizeAxis(xaxis bool) floatn {
-	if xaxis {
-		return floatn(pd.Horizontal())
-	}
-	return floatn(pd.Vertical())
-}
-
+// LayoutConfig controls the size and position of an element and its children.
 type LayoutConfig struct {
 	Sizing          Sizing
 	Padding         Padding
-	ChildGap        uint16
+	ChildGap        uint16 // Gap between child elements along the layout axis.
 	ChildAlignment  ChildAlignment
 	LayoutDirection LayoutDirection
 }
 
+// TextElementConfigWrapMode controls how text is broken into lines when there is insufficient horizontal space.
 type TextElementConfigWrapMode uint8
 
 const (
@@ -318,6 +169,7 @@ const (
 	TextWrapNone                                      // text wrap none
 )
 
+// TextAlignment controls how wrapped lines of text are horizontally aligned within their bounding box.
 type TextAlignment uint8
 
 const (
@@ -326,25 +178,29 @@ const (
 	TextAlignRight                       // text align right
 )
 
+// TextElementConfig controls text element measurement and rendering.
 type TextElementConfig struct {
+	UserData      any // Passed through to the resulting render commands.
 	TextColor     Color
 	FontID        uint16
 	FontSize      uint16
-	LetterSpacing uint16
-	LineHeight    uint16
+	LetterSpacing uint16 // Extra horizontal space between characters.
+	LineHeight    uint16 // Height of each wrapped line. Zero uses the measured height.
 	WrapMode      TextElementConfigWrapMode
 	TextAlignment TextAlignment
 }
 
+// AspectRatioElementConfig sets the target width/height ratio of an element.
 type AspectRatioElementConfig struct {
 	AspectRatio floatn
 }
 
+// ImageElementConfig marks an element as an image. ImageData is passed through to the renderer.
 type ImageElementConfig struct {
-	ImageData        any
-	SourceDimensions Dimensions
+	ImageData any
 }
 
+// FloatingAttachPointType selects a point on an element's bounding box.
 type FloatingAttachPointType uint8
 
 const (
@@ -359,18 +215,21 @@ const (
 	AttachPointRightBottom                                 // attach right bottom
 )
 
+// FloatingAttachPoints controls where a floating element attaches to its parent.
 type FloatingAttachPoints struct {
-	Element FloatingAttachPointType
-	Parent  FloatingAttachPointType
+	Element FloatingAttachPointType // Origin point on the floating element.
+	Parent  FloatingAttachPointType // Point on the parent the floating element attaches to.
 }
 
-type MousePointerCaptureMode uint8
+// PointerCaptureMode controls whether pointer events pass through a floating element.
+type PointerCaptureMode uint8
 
 const (
-	PointerCaptureModeCapture     MousePointerCaptureMode = iota // pointer mode capture
-	PointerCaptureModePassthrough                                // pointer mode passthrough
+	PointerCaptureModeCapture     PointerCaptureMode = iota // pointer mode capture
+	PointerCaptureModePassthrough                           // pointer mode passthrough
 )
 
+// FloatingAttachToElement controls which element a floating element is positioned relative to.
 type FloatingAttachToElement uint8
 
 const (
@@ -380,6 +239,7 @@ const (
 	AttachToRoot                                         // attach to root
 )
 
+// FloatingClipToElement controls whether a floating element inherits clipping from the element it is attached to.
 type FloatingClipToElement uint8
 
 const (
@@ -387,68 +247,66 @@ const (
 	ClipToAttachedParent                              // clip to attached parent
 )
 
+// FloatingElementConfig makes an element float above others without affecting the layout of siblings or parents.
+// Floating is enabled by setting AttachTo to something other than [AttachToNone].
 type FloatingElementConfig struct {
 	Offset             Vector2
-	Expand             Dimensions
-	ParentID           uintn
-	Zindex             int16
+	Expand             Dimensions // Expands the bounding box without affecting children.
+	ParentID           uintn      // Element to attach to when AttachTo is AttachToElementWithID.
+	ZIndex             int16
 	AttachPoints       FloatingAttachPoints
-	PointerCaptureMode MousePointerCaptureMode
+	PointerCaptureMode PointerCaptureMode
 	AttachTo           FloatingAttachToElement
 	ClipTo             FloatingClipToElement
 }
 
+// CustomElementConfig creates custom render commands. CustomData is passed through to the renderer.
+type CustomElementConfig struct {
+	CustomData any
+}
+
+// ClipElementConfig clips overflowing children and offsets them, for scroll containers.
 type ClipElementConfig struct {
 	Horizontal  bool
 	Vertical    bool
 	ChildOffset Vector2
 }
 
+// BorderWidth holds per side border widths. BetweenChildren draws borders between children along the layout direction.
 type BorderWidth struct {
 	Left, Right, Top, Bottom, BetweenChildren uint16
 }
 
+func (bw BorderWidth) hasAnyWidth() bool {
+	return bw.BetweenChildren > 0 || bw.Left > 0 || bw.Right > 0 || bw.Top > 0 || bw.Bottom > 0
+}
+
+// BorderElementConfig configures element borders.
 type BorderElementConfig struct {
 	Color Color
 	Width BorderWidth
 }
 
-type TextRenderData struct {
-	Contents      strslice
-	TextColor     Color
-	FontID        uint16
-	FontSize      uint16
-	LetterSpacing uint16
-	LineHeight    uint16
-}
-
-type ImageRenderData struct {
-	BackgroundColor  Color
-	CornerRadius     CornerRadius
-	SourceDimensions Dimensions
-	ImageData        any
-}
-
-type ClipRenderData struct {
-	Horizontal, Vertical bool
-}
-type RectangleRenderData struct {
+// ElementDeclaration configures an element. It mirrors Clay_ElementDeclaration.
+type ElementDeclaration struct {
+	Layout LayoutConfig
+	// BackgroundColor generates a rectangle render command if no other config is specified,
+	// otherwise it is passed as a property to image or custom render commands.
 	BackgroundColor Color
 	CornerRadius    CornerRadius
+	AspectRatio     AspectRatioElementConfig
+	Image           ImageElementConfig
+	Floating        FloatingElementConfig
+	Custom          CustomElementConfig
+	Clip            ClipElementConfig
+	Border          BorderElementConfig
+	// UserData is passed through to render commands. Store pointers to avoid allocating.
+	UserData any
 }
-type BorderRenderData struct {
-	Color        Color
-	CornerRadius CornerRadius
-	Width        BorderWidth
-}
-type CustomRenderData struct {
-	BackgroundColor Color
-	CornerRadius    CornerRadius
-	CustomData      any
-}
-type RenderData any
 
+// ScrollContainerData is the state of a scroll (clip) container.
 type ScrollContainerData struct {
+	// ScrollPosition points to the internal scroll position, which may be mutated.
 	ScrollPosition            *Vector2
 	ScrollContainerDimensions Dimensions
 	ContentDimensions         Dimensions
@@ -456,11 +314,7 @@ type ScrollContainerData struct {
 	Found                     bool
 }
 
-type ElementData struct {
-	BoundingBox BoundingBox
-	Found       bool
-}
-
+// RenderCommandType determines how a render command should be handled.
 type RenderCommandType uint8
 
 const (
@@ -474,89 +328,77 @@ const (
 	RenderCommandTypeCustom                                // render:custom
 )
 
+// RenderData holds command specific data. Clay uses a union; glay flattens it and
+// CommandType selects which fields are meaningful:
+//   - Rectangle: Color, CornerRadius.
+//   - Border: Color, CornerRadius, BorderWidth.
+//   - Text: Text, TextOffset, Color, FontID, FontSize, LetterSpacing, LineHeight.
+//   - Image: Color (tint), CornerRadius, Data (image data).
+//   - Custom: Color, CornerRadius, Data (custom data).
+//   - ScissorStart/ScissorEnd: ClipHorizontal, ClipVertical.
+type RenderData struct {
+	Color        Color
+	CornerRadius CornerRadius
+	BorderWidth  BorderWidth
+	// Text is a zero-copy subslice of the string passed to OpenTextElement.
+	Text string
+	// TextOffset is the offset of Text within the source string (clay's baseChars).
+	TextOffset     int32
+	FontID         uint16
+	FontSize       uint16
+	LetterSpacing  uint16
+	LineHeight     uint16
+	ClipHorizontal bool
+	ClipVertical   bool
+	Data           any
+}
+
+// RenderCommand is a single draw instruction produced by [Context.EndLayout].
 type RenderCommand struct {
 	BoundingBox BoundingBox
 	RenderData  RenderData
 	UserData    any
 	ID          uintn
-	Zindex      int16
+	// ZIndex is the z order required for drawing this command correctly. Commands are already
+	// sorted in ascending z order; this field is intended for batching renderers.
+	ZIndex      int16
 	CommandType RenderCommandType
 }
 
-type MousePointerDataInteractionState uint8
+// PointerDataInteractionState is the state of pointer interaction this frame.
+type PointerDataInteractionState uint8
 
 const (
-	PointerDataPressedThisFrame MousePointerDataInteractionState = iota // pointer pressed this frame
-	PointerDataPressed                                                  // pointer pressed
-	PointerReleasedThisFrame                                            // pointer released this frame
-	PointerReleased                                                     // pointer released
+	PointerDataPressedThisFrame  PointerDataInteractionState = iota // pointer pressed this frame
+	PointerDataPressed                                              // pointer pressed
+	PointerDataReleasedThisFrame                                    // pointer released this frame
+	PointerDataReleased                                             // pointer released
 )
 
-type MousePointerData struct {
+// PointerData holds pointer position and interaction state.
+type PointerData struct {
 	Position Vector2
-	State    MousePointerDataInteractionState
+	State    PointerDataInteractionState
 }
 
-type ElementDeclaration struct {
-	ID              ElementID
-	Layout          LayoutConfig
-	BackgroundColor Color
-	CornerRadius    CornerRadius
-	AspectRatio     AspectRatioElementConfig
-	Image           ImageElementConfig
-	Floating        FloatingElementConfig
-	Clip            ClipElementConfig
-	Border          BorderElementConfig
-	UserData        any
-}
-
+// Error is a layout error. Values mirror Clay_ErrorType.
 type Error uint8
 
 const (
-	ErrTextMeasurementFunctionNotProvided Error = iota // a text measurement function wasn't provided using Clay_SetMeasureTextFunction(), or the provided function was null
-	ErrPercentageOver1                                 // an element was configured with CLAY_SIZING_PERCENT, but the provided percentage value was over 1.0. Clay expects a value between 0 and 1, i.e. 20% is 0.2
-	ErrFloatingContainerParentNotFound                 // a floating element was declared with a parentId, but no element with that ID was found
-	ErrElementsCapacityExceeded                        // Clay ran out of capacity while attempting to create render commands. This is usually caused by a large amount of wrapping text elements while close to the max element capacity. Try using Clay_SetMaxElementCount() with a higher value
-	// ErrArenaCapacityExceeded                           // Clay attempted to allocate memory in its arena, but ran out of capacity. Try increasing the capacity of the arena passed to Clay_Initialize()
+	ErrTextMeasurementFunctionNotProvided Error = iota // text measurement function not provided
+	ErrArenaCapacityExceeded                           // arena capacity exceeded
+	ErrElementsCapacityExceeded                        // elements capacity exceeded; increase MaxElementCount
+	ErrTextMeasurementCapacityExceeded                 // text measurement capacity exceeded; increase MaxMeasureTextCacheWordCount
+	ErrDuplicateID                                     // element declared with an ID already used in this layout
+	ErrFloatingContainerParentNotFound                 // floating element parent ID not found
+	ErrPercentageOver1                                 // sizing percent over 1; expect range 0..1, i.e: 20% is 0.2
+	ErrInternal                                        // internal error
+	ErrUnbalancedOpenClose                             // unbalanced OpenElement/CloseElement calls
+	ErrHashMapCapacityExceeded                         // element ID hash map capacity exceeded; increase MaxElementCount
+	ErrInvalidConfig                                   // invalid configuration
 )
 
-func (e Error) Error() string {
-	return e.String()
-}
+func (e Error) Error() string { return e.String() }
 
-type debugElementData struct {
-	collision, collapsed bool
-}
-
-type measuredWord struct {
-	StartOffset intn
-	Length      intn
-	Width       floatn
-	Next        intn
-}
-
-type measureTextCacheItem struct {
-	unwrappedDimensions    Dimensions
-	measureWordsStartIndex intn
-	minWidth               floatn
-	containsNewlines       bool
-	// hash map data.
-	ID         uintn
-	nextIndex  intn
-	generation uintn
-}
-
-type scrollContainerDataInternal struct {
-	LayoutElement       *LayoutElement
-	BoundingBox         BoundingBox
-	ContentSize         Dimensions
-	ScrollOrigin        Vector2
-	PointerOrigin       Vector2
-	ScrollMomentum      Vector2
-	ScrollPosition      Vector2
-	PreviousDelta       Vector2
-	MomentumTime        floatn
-	ElementID           uintn
-	OpenThisFrame       bool
-	PointerScrollActive bool
-}
+// ErrorHandler is called for every error clay would report through its error handler.
+type ErrorHandler func(err Error, userData any)
