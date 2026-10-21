@@ -48,6 +48,3 @@ glay-webgpu
 
 # If running a python script.
 */__pycache__/*
-
-# Reference fixtures for differential testing against clay.
-!internal/clayref/testdata/*.json

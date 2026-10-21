@@ -17,8 +17,11 @@ import (
 	"time"
 )
 
-// ClayCommit is the upstream clay commit the reference fixtures were generated with.
-const ClayCommit = "e6cc369"
+// ClayCommit is the upstream clay commit glay is checked against.
+// go generate downloads its clay.h into [ClayDir].
+const ClayCommit = "e6cc36941ab2af5d81107617039d6f527a1c660b"
+
+//go:generate go run fetchclay.go
 
 // sourceDir returns the directory of this package, which holds csrc/clayref.c.
 func sourceDir() string {
@@ -69,7 +72,7 @@ func build() (string, error) {
 	for _, f := range []string{src, hdr} {
 		b, err := os.ReadFile(f)
 		if err != nil {
-			return "", fmt.Errorf("%w: %v (set CLAY_DIR or clone clay@%s into local/clay)", errSkip, err, ClayCommit)
+			return "", fmt.Errorf("%w: %v (run go generate ./internal/clayref or set CLAY_DIR)", errSkip, err)
 		}
 		h.Write(b)
 	}

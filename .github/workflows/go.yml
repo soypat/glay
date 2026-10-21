@@ -26,10 +26,7 @@ jobs:
 
     - name: Fetch upstream clay reference implementation
       # Enables the differential tests in internal/clayref, which otherwise skip.
-      # Keep the commit in sync with clayref.ClayCommit.
-      run: |
-        git clone --quiet https://github.com/nicbarker/clay local/clay
-        git -C local/clay checkout --quiet e6cc369
+      run: go generate ./internal/clayref/
 
     # - name: govulncheck
     #   uses: golang/govulncheck-action@v1
