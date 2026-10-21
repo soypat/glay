@@ -19,10 +19,14 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.21
+        go-version: '1.22'
 
     - name: Build
       run: go build -v ./...
+
+    - name: Fetch upstream clay reference implementation
+      # Enables the differential tests in internal/clayref, which otherwise skip.
+      run: go generate ./internal/clayref/
 
     # - name: govulncheck
     #   uses: golang/govulncheck-action@v1
@@ -32,6 +36,9 @@ jobs:
 
     - name: Test
       run: go test -v -coverprofile=coverage.txt -covermode=atomic ./...
+
+    - name: Differential fuzz against clay
+      run: go test -run XXX -fuzz FuzzClayRef -fuzztime 30s ./internal/clayref/
 
     - name: Codecov upload coverage
       shell: bash
