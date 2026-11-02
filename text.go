@@ -1,89 +1,104 @@
 package glay
 
-// Text adds a text element as a child of the currently open element.
-// A MeasureTextFunction must be set on the Context before calling Text.
-func (context *Context) Text(text string, config *TextElementConfig) error {
-	return context.openTextElement(text, config)
+import "math"
+
+// OpenTextElement declares a text element as a child of the open element. The text is not
+// copied and must remain unmodified until the render commands are consumed.
+// A measure text function must be set; see [Config.MeasureText].
+func (c *Context) OpenTextElement(text string, textConfig TextElementConfig) {
+	c.neededElements++
+	if len(c.layoutElements) == cap(c.layoutElements)-1 || c.booleanWarnings.MaxElementsExceeded {
+		c.booleanWarnings.MaxElementsExceeded = true
+		return
+	}
+	parentElement := c.openLayoutElement()
+
+	textElement := add(c, &c.layoutElements, layoutElement{textConfig: textConfig, isTextElement: true}, &c.def.element)
+	idx := intn(len(c.layoutElements) - 1)
+	c.setClipElementID(idx)
+
+	addv(c, &c.layoutElementChildrenBuffer, idx)
+	// Measure with the element's copy of the config: taking the address of the parameter
+	// would make it escape through the MeasureText callback.
+	textMeasured := c.measureTextCached(text, &textElement.textConfig)
+	elementID := hashNumber(uintn(parentElement.childrenLength)+uintn(parentElement.floatingChildrenCount), parentElement.id)
+	textElement.id = elementID.ID
+	c.addHashMapItem(elementID, idx)
+	addv(c, &c.layoutElementIDStrings, elementID.StringID)
+	textDimensions := Dimensions{Width: textMeasured.unwrappedDimensions.Width, Height: textMeasured.unwrappedDimensions.Height}
+	if textConfig.LineHeight > 0 {
+		textDimensions.Height = floatn(textConfig.LineHeight)
+	}
+	textElement.dimensions = textDimensions
+	textElement.minDimensions = Dimensions{Width: textMeasured.minWidth, Height: textDimensions.Height}
+	textElement.textElementData = textElementData{text: text, preferredDimensions: textMeasured.unwrappedDimensions}
+	parentElement.childrenLength++
 }
 
-func (context *Context) openTextElement(text string, config *TextElementConfig) error {
-	if arrlen(context.LayoutElements) == arrcap(context.LayoutElements)-1 || context.warnMaxElementsExceeded() {
-		return ErrElementsCapacityExceeded
-	}
-	parentElement := context.openLayoutElement()
-
-	context.LayoutElements = arradd(context.LayoutElements, LayoutElement{})
-	textElement := arrlast(context.LayoutElements)
-	if arrlen(context.openClipElementStack) > 0 {
-		context.LayoutElementClipElementIDs[len(context.LayoutElements)-1] = context.openClipElementStack[arrlen(context.openClipElementStack)-1]
-	} else {
-		context.LayoutElementClipElementIDs[len(context.LayoutElements)-1] = 0
-	}
-	context.LayoutElementChildrenBuffer = arradd(context.LayoutElementChildrenBuffer, arrlen(context.LayoutElements)-1)
-	textMeasured := context.measureTextCached(text, config)
-
-	elementID := hashNumber(uintn(len(parentElement.Children())), parentElement.ID)
-	textElement.ID = elementID.ID
-	context.AddHashMapItem(elementID, textElement, 0)
-	context.LayoutElementIDStrings = arradd(context.LayoutElementIDStrings, elementID.StringID)
-
-	var textHeight floatn
-	if config.LineHeight > 0 {
-		textHeight = floatn(config.LineHeight)
-	} else {
-		textHeight = textMeasured.unwrappedDimensions.Height
-	}
-	textElement.Dimensions = Dimensions{Width: textMeasured.unwrappedDimensions.Width, Height: textHeight}
-	textElement.MinDimensions = Dimensions{Width: textMeasured.minWidth, Height: textHeight}
-
-	context.TextElementData = arradd(context.TextElementData, TextElementData{
-		Text:                text,
-		PreferredDimensions: textMeasured.unwrappedDimensions,
-		ElementIndex:        arrlen(context.LayoutElements) - 1,
-	})
-	textElement.ChildrenOrTextContent = arrlast(context.TextElementData)
-
-	context.ElementConfigs = arradd(context.ElementConfigs, ElementConfig{
-		Type:   ElementConfigTypeText,
-		Config: config,
-	})
-	textElement.ElementConfigs = context.ElementConfigs[len(context.ElementConfigs)-1:]
-	textElement.LayoutConfig = &defaultLayoutConfig
-
-	children := parentElement.Children()
-	parentElement.ChildrenOrTextContent = append(children, -1)
-	return nil
+// ResetMeasureTextCache clears the text measurement cache, i.e. after fonts are reloaded.
+func (c *Context) ResetMeasureTextCache() {
+	c.measureTextHashMapInternal = c.measureTextHashMapInternal[:0]
+	c.measureTextHashMapInternalFreeList = c.measureTextHashMapInternalFreeList[:0]
+	c.measuredWords = c.measuredWords[:0]
+	c.measuredWordsFreeList = c.measuredWordsFreeList[:0]
+	clear(c.measureTextHashMap)
+	c.measureTextHashMapInternal = c.measureTextHashMapInternal[:1] // Reserve the 0 value to mean "no next element".
+	c.measureTextHashMapInternal[0] = measureTextCacheItem{}
 }
 
-func (context *Context) measureTextCached(text string, config *TextElementConfig) *measureTextCacheItem {
-	id := hashTextWithConfig(text, config)
-	hashbucket := id % (uint32(context.MaxMeasureTextCacheWordCount) / 32)
-	var elementIndexPrevious intn
-	elementIndex := context.measureTextHashMap[hashbucket]
+func (c *Context) measureTextRaw(text string, config *TextElementConfig) Dimensions {
+	if c.measureText == nil {
+		return Dimensions{}
+	}
+	return c.measureText(text, config, c.measureTextUserData)
+}
+
+func (c *Context) addMeasuredWord(word measuredWord, previousWord *measuredWord) *measuredWord {
+	if len(c.measuredWordsFreeList) > 0 {
+		newItemIndex := getValue(c, c.measuredWordsFreeList, intn(len(c.measuredWordsFreeList))-1)
+		c.measuredWordsFreeList = c.measuredWordsFreeList[:len(c.measuredWordsFreeList)-1]
+		set(c, &c.measuredWords, newItemIndex, word)
+		previousWord.next = newItemIndex
+		return get(c, c.measuredWords, newItemIndex, &c.def.word)
+	}
+	previousWord.next = intn(len(c.measuredWords))
+	return add(c, &c.measuredWords, word, &c.def.word)
+}
+
+func (c *Context) measureTextCached(text string, config *TextElementConfig) *measureTextCacheItem {
+	if c.measureText == nil {
+		if !c.booleanWarnings.TextMeasurementFunctionNotSet {
+			c.booleanWarnings.TextMeasurementFunctionNotSet = true
+			c.report(ErrTextMeasurementFunctionNotProvided)
+		}
+		return &c.def.measure
+	}
+	id := hashStringContentsWithConfig(text, config)
+	hashBucket := id % uintn(c.maxMeasureTextCacheWordCount/32)
+	elementIndexPrevious := intn(0)
+	elementIndex := c.measureTextHashMap[hashBucket]
 	for elementIndex != 0 {
-		hashEntry := &context.measureTextHashMapInternal[elementIndex]
-		if hashEntry.ID == uintn(id) {
-			hashEntry.generation = context.Generation
+		hashEntry := get(c, c.measureTextHashMapInternal, elementIndex, &c.def.measure)
+		if hashEntry.id == id {
+			hashEntry.generation = c.generation
 			return hashEntry
 		}
 		// This element hasn't been seen in a few frames, delete the hash map item.
-		if context.Generation-hashEntry.generation > 2 {
-			// Add all the measured words that were included in this measurement to the freelist
-			nextWordIndex := hashEntry.measureWordsStartIndex
+		if c.generation-hashEntry.generation > 2 {
+			// Add all the measured words that were included in this measurement to the freelist.
+			nextWordIndex := hashEntry.measuredWordsStartIndex
 			for nextWordIndex != -1 {
-				measured := &context.measuredWords[nextWordIndex]
-				context.measuredWordsFreeList = arradd(context.measuredWordsFreeList, nextWordIndex)
-				nextWordIndex = measured.Next
+				measured := get(c, c.measuredWords, nextWordIndex, &c.def.word)
+				addv(c, &c.measuredWordsFreeList, nextWordIndex)
+				nextWordIndex = measured.next
 			}
-
 			nextIndex := hashEntry.nextIndex
-			context.measureTextHashMapInternal[elementIndex] = measureTextCacheItem{measureWordsStartIndex: -1}
-			context.MeasureTextHashMapInternalFreelist = arradd(context.MeasureTextHashMapInternalFreelist, elementIndex)
+			set(c, &c.measureTextHashMapInternal, elementIndex, measureTextCacheItem{measuredWordsStartIndex: -1})
+			addv(c, &c.measureTextHashMapInternalFreeList, elementIndex)
 			if elementIndexPrevious == 0 {
-				context.measureTextHashMap[hashbucket] = nextIndex
+				c.measureTextHashMap[hashBucket] = nextIndex
 			} else {
-				previousHashEntry := &context.measureTextHashMapInternal[elementIndexPrevious]
-				previousHashEntry.nextIndex = nextIndex
+				get(c, c.measureTextHashMapInternal, elementIndexPrevious, &c.def.measure).nextIndex = nextIndex
 			}
 			elementIndex = nextIndex
 		} else {
@@ -93,53 +108,59 @@ func (context *Context) measureTextCached(text string, config *TextElementConfig
 	}
 
 	var newItemIndex intn
-	newCacheItem := measureTextCacheItem{measureWordsStartIndex: -1, ID: id, generation: context.Generation}
+	newCacheItem := measureTextCacheItem{measuredWordsStartIndex: -1, id: id, generation: c.generation}
 	var measured *measureTextCacheItem
-	if len(context.MeasureTextHashMapInternalFreelist) > 0 {
-		context.MeasureTextHashMapInternalFreelist, newItemIndex = arrpop(context.MeasureTextHashMapInternalFreelist)
-		context.measureTextHashMapInternal[newItemIndex] = newCacheItem
-		measured = &context.measureTextHashMapInternal[newItemIndex]
+	if len(c.measureTextHashMapInternalFreeList) > 0 {
+		newItemIndex = getValue(c, c.measureTextHashMapInternalFreeList, intn(len(c.measureTextHashMapInternalFreeList))-1)
+		c.measureTextHashMapInternalFreeList = c.measureTextHashMapInternalFreeList[:len(c.measureTextHashMapInternalFreeList)-1]
+		set(c, &c.measureTextHashMapInternal, newItemIndex, newCacheItem)
+		measured = get(c, c.measureTextHashMapInternal, newItemIndex, &c.def.measure)
 	} else {
-		if arrfree(context.measureTextHashMapInternal) == 0 {
-			panic("clay ran out of capacity during text element measurement")
+		if len(c.measureTextHashMapInternal) == cap(c.measureTextHashMapInternal)-1 {
+			if !c.booleanWarnings.MaxTextMeasureCacheExceeded {
+				c.report(ErrElementsCapacityExceeded)
+				c.booleanWarnings.MaxTextMeasureCacheExceeded = true
+			}
+			return &c.def.measure
 		}
-		context.measureTextHashMapInternal = arradd(context.measureTextHashMapInternal, newCacheItem)
-		newItemIndex = arrlen(context.measureTextHashMapInternal) - 1
-		measured = &context.measureTextHashMapInternal[newItemIndex]
+		measured = add(c, &c.measureTextHashMapInternal, newCacheItem, &c.def.measure)
+		newItemIndex = intn(len(c.measureTextHashMapInternal) - 1)
 	}
+
 	var start, end intn
 	var lineWidth, measuredWidth, measuredHeight floatn
-	spaceWidth := context.measureSpaceWidth(config)
-	tempWord := measuredWord{Next: -1}
-	prevWord := &tempWord
+	spaceWidth := c.measureTextRaw(" ", config).Width
+	tempWord := measuredWord{next: -1}
+	previousWord := &tempWord
 	for end < intn(len(text)) {
-		if arrfree(context.measuredWords) == 0 {
-			panic("clay run out of space in internal text measurement cache")
+		if len(c.measuredWords) == cap(c.measuredWords)-1 {
+			if !c.booleanWarnings.MaxTextMeasureCacheExceeded {
+				c.report(ErrTextMeasurementCapacityExceeded)
+				c.booleanWarnings.MaxTextMeasureCacheExceeded = true
+			}
+			return &c.def.measure
 		}
 		current := text[end]
 		if current == ' ' || current == '\n' {
 			length := end - start
 			var dimensions Dimensions
 			if length > 0 {
-				dimensions = context.measureTextRaw(text[start:], config)
+				dimensions = c.measureTextRaw(text[start:end], config)
 			}
-			measured.minWidth = max(dimensions.Width, measured.minWidth)
-			measuredHeight = max(measuredHeight, dimensions.Height)
+			measured.minWidth = cmax(dimensions.Width, measured.minWidth)
+			measuredHeight = cmax(measuredHeight, dimensions.Height)
 			if current == ' ' {
 				dimensions.Width += spaceWidth
-				word := measuredWord{StartOffset: start, Length: length + 1, Width: dimensions.Width, Next: -1}
-				prevWord = context.addMeasuredWord(word, prevWord)
+				previousWord = c.addMeasuredWord(measuredWord{startOffset: start, length: length + 1, width: dimensions.Width, next: -1}, previousWord)
 				lineWidth += dimensions.Width
 			}
 			if current == '\n' {
 				if length > 0 {
-					word := measuredWord{StartOffset: start, Length: length, Width: dimensions.Width, Next: -1}
-					prevWord = context.addMeasuredWord(word, prevWord)
+					previousWord = c.addMeasuredWord(measuredWord{startOffset: start, length: length, width: dimensions.Width, next: -1}, previousWord)
 				}
-				word := measuredWord{StartOffset: end + 1, Next: -1}
-				prevWord = context.addMeasuredWord(word, prevWord)
+				previousWord = c.addMeasuredWord(measuredWord{startOffset: end + 1, length: 0, width: 0, next: -1}, previousWord)
 				lineWidth += dimensions.Width
-				measuredWidth = max(lineWidth, measuredWidth)
+				measuredWidth = cmax(lineWidth, measuredWidth)
 				measured.containsNewlines = true
 				lineWidth = 0
 			}
@@ -148,73 +169,54 @@ func (context *Context) measureTextCached(text string, config *TextElementConfig
 		end++
 	}
 	if end-start > 0 {
-		dimensions := context.measureTextRaw(text[start:end], config)
-		word := measuredWord{StartOffset: start, Length: end - start, Width: dimensions.Width, Next: -1}
-		_ = context.addMeasuredWord(word, prevWord)
+		dimensions := c.measureTextRaw(text[start:end], config)
+		c.addMeasuredWord(measuredWord{startOffset: start, length: end - start, width: dimensions.Width, next: -1}, previousWord)
 		lineWidth += dimensions.Width
-		measuredHeight = max(measuredHeight, dimensions.Height)
-		measured.minWidth = max(dimensions.Width, measured.minWidth)
+		measuredHeight = cmax(measuredHeight, dimensions.Height)
+		measured.minWidth = cmax(dimensions.Width, measured.minWidth)
 	}
-	measuredWidth = max(lineWidth, measuredWidth)
+	measuredWidth = cmax(lineWidth, measuredWidth) - floatn(config.LetterSpacing)
 
-	measured.measureWordsStartIndex = tempWord.Next
+	measured.measuredWordsStartIndex = tempWord.next
 	measured.unwrappedDimensions.Width = measuredWidth
 	measured.unwrappedDimensions.Height = measuredHeight
 
 	if elementIndexPrevious != 0 {
-		context.measureTextHashMapInternal[elementIndexPrevious].nextIndex = newItemIndex
+		get(c, c.measureTextHashMapInternal, elementIndexPrevious, &c.def.measure).nextIndex = newItemIndex
 	} else {
-		context.measureTextHashMap[hashbucket] = newItemIndex
+		c.measureTextHashMap[hashBucket] = newItemIndex
 	}
 	return measured
 }
 
-func (context *Context) measureSpaceWidth(textconfig *TextElementConfig) floatn {
-	return context.measureTextRaw(" ", textconfig).Width
+// hashData is the portable (non-SIMD) variant of clay's Clay__HashData.
+func hashData(data string) uint64 {
+	var hash uint64
+	for i := 0; i < len(data); i++ {
+		hash += uint64(data[i])
+		hash += hash << 10
+		hash ^= hash >> 6
+	}
+	return hash
 }
 
-func (context *Context) measureTextRaw(text string, textconfig *TextElementConfig) Dimensions {
-	if context.MeasureTextFunction == nil {
-		context.logerr("measuretextfunc==nil")
-		return Dimensions{}
-	}
-	return context.MeasureTextFunction(text, textconfig, context.MeasureTextUserData)
-}
-
-func (context *Context) addMeasuredWord(word measuredWord, previousWord *measuredWord) *measuredWord {
-	if len(context.measuredWordsFreeList) > 0 {
-		var newItemIndex intn
-		context.measuredWordsFreeList, newItemIndex = arrpop(context.measuredWordsFreeList)
-		context.measuredWords[newItemIndex] = word
-		previousWord.Next = newItemIndex
-		return &context.measuredWords[newItemIndex]
-	}
-	previousWord.Next = arrlen(context.measuredWords)
-	context.measuredWords = arradd(context.measuredWords, word)
-	return &context.measuredWords[len(context.measuredWords)-1]
-}
-
-func hashTextWithConfig(text string, config *TextElementConfig) (hash uint32) {
-	for i := 0; i < len(text); i++ {
-		hash += uint32(text[i])
-		hash += (hash << 10)
-		hash ^= (hash >> 6)
-	}
+func hashStringContentsWithConfig(text string, config *TextElementConfig) uint32 {
+	hash := uint32(hashData(text) % math.MaxUint32)
 
 	hash += uint32(config.FontID)
-	hash += (hash << 10)
-	hash ^= (hash >> 6)
+	hash += hash << 10
+	hash ^= hash >> 6
 
 	hash += uint32(config.FontSize)
-	hash += (hash << 10)
-	hash ^= (hash >> 6)
+	hash += hash << 10
+	hash ^= hash >> 6
 
 	hash += uint32(config.LetterSpacing)
-	hash += (hash << 10)
-	hash ^= (hash >> 6)
+	hash += hash << 10
+	hash ^= hash >> 6
 
-	hash += (hash << 3)
-	hash ^= (hash >> 11)
-	hash += (hash << 15)
-	return hash + 1
+	hash += hash << 3
+	hash ^= hash >> 11
+	hash += hash << 15
+	return hash + 1 // Reserve the hash result of zero as "null id".
 }

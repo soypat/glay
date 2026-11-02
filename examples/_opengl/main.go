@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
-	"log/slog"
 	"runtime"
-	"sort"
 	"strings"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
@@ -57,9 +55,9 @@ func main() {
 
 	// Set up Glay context
 	var context glay.Context
-	context.MaxElementCount = 100
 	err = context.Initialize(glay.Config{
-		Layout: glay.Dimensions{Width: width, Height: height},
+		Layout:          glay.Dimensions{Width: width, Height: height},
+		MaxElementCount: 100,
 	})
 	if err != nil {
 		log.Fatalf("failed to initialize Glay context: %v", err)
@@ -76,41 +74,23 @@ func main() {
 		// Add this code to your main.go, right before context.BeginLayout()
 
 		// Begin Glay layout
-		err = context.BeginLayout()
-		if err != nil {
-			slog.Warn("BeginLayout error: %v", err)
-		}
+		context.BeginLayout()
 
 		// Main container
-		shared := &glay.SharedElementConfig{
-			BackgroundColor: glay.Color{50, 50, 50, 0},
-		}
-		context.Clay(glay.ElementDeclaration{
-			ID:              glay.ID("MainContainer"),
+		context.Clay(glay.ID("MainContainer"), &glay.ElementDeclaration{
 			BackgroundColor: glay.Color{50, 50, 50, 128},
 			Layout: glay.LayoutConfig{
 				LayoutDirection: glay.TopToBottom,
 				Sizing: glay.Sizing{
-					Width:  glay.NewSizingAxis(glay.SizingGrow, 0, 0),
-					Height: glay.NewSizingAxis(glay.SizingGrow, 0, 0),
+					Width:  glay.SizingAxisGrow(0, 0),
+					Height: glay.SizingAxisGrow(0, 0),
 				},
 				Padding:  glay.PaddingAll(16),
 				ChildGap: 16,
 			},
-			UserData: shared,
-			Floating: glay.FloatingElementConfig{
-				Zindex: 0, // Lower Z-index for parent
-			},
-		}, func(context *glay.Context) error {
-			err = declButton(context, "Button1", glay.Color{255, 120, 200, 255}, 200, 50)
-			if err != nil {
-				return err
-			}
-			err = declButton(context, "Button2", glay.Color{100, 120, 200, 255}, 200, 50)
-			if err != nil {
-				return err
-			}
-			return nil
+		}, func(context *glay.Context) {
+			declButton(context, "Button1", glay.Color{255, 120, 200, 255}, 200, 50)
+			declButton(context, "Button2", glay.Color{100, 120, 200, 255}, 200, 50)
 		})
 
 		// Get render commands from Glay
@@ -129,18 +109,14 @@ func main() {
 	}
 }
 
-func declButton(context *glay.Context, IDName string, color glay.Color, width, height float32) error {
-	return context.Clay(glay.ElementDeclaration{
-		ID:              glay.ID(IDName),
+func declButton(context *glay.Context, IDName string, color glay.Color, width, height float32) {
+	context.Clay(glay.ID(IDName), &glay.ElementDeclaration{
 		BackgroundColor: color,
 		Layout: glay.LayoutConfig{
 			Sizing: glay.Sizing{
-				Width:  glay.NewSizingAxis(glay.SizingFixed, width),
-				Height: glay.NewSizingAxis(glay.SizingFixed, height),
+				Width:  glay.SizingAxisFixed(width),
+				Height: glay.SizingAxisFixed(height),
 			},
-		},
-		Floating: glay.FloatingElementConfig{
-			Zindex: 1, // Higher Z-index for child
 		},
 	})
 }
@@ -260,11 +236,7 @@ func (ren *UIRenderer) ProcessRenderCommands(commands []glay.RenderCommand) {
 	if len(commands) == 0 {
 		return
 	}
-	// Sort commands by z-index to ensure correct drawing order
-	sort.Slice(commands, func(i, j int) bool {
-		return commands[i].Zindex < commands[j].Zindex
-	})
-
+	// Commands are already sorted by z-index by glay.
 	// Ensure viewport is correctly set
 	gl.Viewport(0, 0, int32(ren.screenWidth), int32(ren.screenHeight))
 
@@ -290,23 +262,13 @@ func (ren *UIRenderer) ProcessRenderCommands(commands []glay.RenderCommand) {
 		w := cmd.BoundingBox.Width
 		h := cmd.BoundingBox.Height
 
-		// Extract color from render data
-		var r, g, b, a float32 = 1.0, 1.0, 1.0, 1.0 // Default white
-
-		switch data := cmd.RenderData.(type) {
-		case glay.RectangleRenderData:
-			r = float32(data.BackgroundColor.R) / 255.0
-			g = float32(data.BackgroundColor.G) / 255.0
-			b = float32(data.BackgroundColor.B) / 255.0
-			a = float32(data.BackgroundColor.A) / 255.0
-		case glay.Color:
-			r = float32(data.R) / 255.0
-			g = float32(data.G) / 255.0
-			b = float32(data.B) / 255.0
-			a = float32(data.A) / 255.0
-		default:
-			log.Printf("Unknown render data type: %T for command %d", cmd.RenderData, i)
+		if cmd.CommandType != glay.RenderCommandTypeRectangle {
+			log.Printf("Unhandled render command type: %s for command %d", cmd.CommandType, i)
+			continue
 		}
+		// Extract color from render data.
+		c := cmd.RenderData.Color
+		r, g, b, a := c.R/255, c.G/255, c.B/255, c.A/255
 
 		// Create vertex data for quad with positions and colors
 		vertices := []float32{

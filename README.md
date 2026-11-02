@@ -6,43 +6,69 @@
 [![sourcegraph](https://sourcegraph.com/github.com/soypat/glay/-/badge.svg)](https://sourcegraph.com/github.com/soypat/glay?badge)
 
 
-A Go line-by-line port of the fascinating [Clay UI](https://github.com/nicbarker/clay) library for science.
+A Go line-by-line port of the fascinating [Clay UI](https://github.com/nicbarker/clay) layout library.
 
+- **Static allocation**: all memory is allocated once by `Initialize`. Laying out a frame does not allocate.
+- **Faithful**: glay is differentially tested and fuzzed against the upstream C implementation
+  (clay 0.14, commit `e6cc369`), see [internal/clayref](./internal/clayref).
 
 ## Basic usage example
-This library is a WIP. There may (read as "certainly may") be bugs.
 
 ```go
-    var context Context
-    err := context.Initialize(Config{
-        Layout: Dimensions{Width: 100, Height: 100},
-    })
-    if err != nil {
-        log.Fatalf(err)
+var ctx glay.Context
+err := ctx.Initialize(glay.Config{
+    Layout:          glay.Dimensions{Width: 640, Height: 480},
+    MaxElementCount: 1024,
+    MeasureText:     measureText, // Required for text elements.
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+ctx.BeginLayout()
+ctx.Clay(glay.ID("OuterContainer"), &glay.ElementDeclaration{
+    BackgroundColor: glay.Color{R: 43, G: 41, B: 51, A: 255},
+    Layout: glay.LayoutConfig{
+        LayoutDirection: glay.TopToBottom,
+        Sizing:          glay.Sizing{Width: glay.SizingAxisGrow(0, 0), Height: glay.SizingAxisGrow(0, 0)},
+        Padding:         glay.PaddingAll(16),
+        ChildGap:        16,
+    },
+}, func(ctx *glay.Context) {
+    for i := range uint32(3) {
+        ctx.Clay(glay.IDI("Item", i), &glay.ElementDeclaration{
+            BackgroundColor: glay.Color{R: 90, G: 200, B: 170, A: 255},
+            Layout:          glay.LayoutConfig{Sizing: glay.Sizing{Width: glay.SizingAxisGrow(0, 0), Height: glay.SizingAxisFixed(32)}},
+        })
     }
-    err = context.BeginLayout()
-    if err != nil {
-        log.Fatalf(err)
-    }
-    // backgroundColor := Color{90, 90, 90, 255}
-    err = context.Clay(ElementDeclaration{
-        ID:              ID("OuterContainer"),
-        BackgroundColor: Color{43, 41, 51, 255},
-        Layout: LayoutConfig{
-            LayoutDirection: TopToBottom,
-            Sizing: Sizing{
-                Width:  NewSizingAxis(SizingGrow, 0, 0),
-                Height: NewSizingAxis(SizingGrow, 0, 0),
-            },
-            Padding:  PaddingAll(16),
-            ChildGap: 16,
-        },
-    })
-    if err != nil {
-        t.Fatal(err)
-    }
-    cmds, err := context.EndLayout()
-    if err != nil {
-        t.Fatal(err)
-    }
+    ctx.Text("Hello glay", glay.TextElementConfig{FontSize: 16, TextColor: glay.Color{R: 255, G: 255, B: 255, A: 255}})
+})
+cmds, err := ctx.EndLayout()
+if err != nil {
+    log.Println(err) // Commands remain valid unless err is glay.ErrElementsCapacityExceeded.
+}
+for _, cmd := range cmds {
+    // Draw cmd according to cmd.CommandType.
+}
 ```
+
+`Clay` takes closures for convenience, which may allocate. For allocation free layouts
+use the raw API that the `CLAY()` macro expands to in C:
+
+```go
+ctx.OpenElementWithID(glay.ID("Panel")) // Or ctx.OpenElement() for an anonymous element.
+ctx.ConfigureOpenElement(&decl)
+ctx.OpenTextElement("label", textConfig)
+ctx.CloseElement()
+```
+
+## Differences with clay
+
+- Errors are reported through `Config.ErrorHandler` like in clay, and `EndLayout` also returns the first error of the frame.
+- `Initialize` validates its configuration and returns `ErrInvalidConfig` instead of crashing
+  (clay requires `32 <= MaxMeasureTextCacheWordCount <= 32*MaxElementCount`).
+- Clay loops forever in its compression and grow passes when an iteration makes no progress
+  (i.e. with negative sizes). glay stops iterating, which produces the same result whenever clay terminates.
+- Clay reads past the end of its arrays in some capacity overflow cases. glay never reads
+  out of bounds, instead reporting `ErrInternal` like clay does for its other bounds checks.
+- The debug view, transitions and overlay colors are not implemented.
