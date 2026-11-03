@@ -73,6 +73,8 @@ glay adds the following to clay's API. None of them changes clay's output.
   wrapped line arrays separately. Clay sizes both to `MaxElementCount`, which stays the default.
 - `BooleanWarnings.MaxWrappedTextLinesExceeded` reports wrapped lines dropped for lack of room,
   for which clay reports no error.
+- `ResetScrollContainers` forgets the state of all scroll containers, as `ResetMeasureTextCache`
+  does for the text measurement cache.
 
 ## Differences with clay
 

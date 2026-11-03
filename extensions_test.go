@@ -184,3 +184,42 @@ func TestSeparateCapacities(t *testing.T) {
 		t.Fatal("fewer lines should take less memory")
 	}
 }
+
+func TestResetScrollContainers(t *testing.T) {
+	var c Context
+	if err := c.Initialize(Config{Layout: Dimensions{Width: 100, Height: 100}, MaxElementCount: 16}); err != nil {
+		t.Fatal(err)
+	}
+	layout := func(ids ...string) {
+		c.BeginLayout()
+		for _, id := range ids {
+			c.OpenElementWithID(ID(id))
+			c.ConfigureOpenElement(&ElementDeclaration{Clip: ClipElementConfig{Vertical: true}})
+			c.CloseElement()
+		}
+		if _, err := c.EndLayout(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	layout("A", "B", "C")
+	*c.GetScrollContainerData(ID("A")).ScrollPosition = Vector2{Y: -5}
+	if len(c.scrollContainerDatas) != 3 {
+		t.Fatalf("want 3 scroll containers, got %d", len(c.scrollContainerDatas))
+	}
+	c.ResetScrollContainers()
+	if c.GetScrollContainerData(ID("A")).Found {
+		t.Fatal("scroll container found after reset")
+	}
+	layout("A")
+	sd := c.GetScrollContainerData(ID("A"))
+	if len(c.scrollContainerDatas) != 1 || !sd.Found || *sd.ScrollPosition != (Vector2{}) {
+		t.Fatalf("after reset: %d scroll containers, %+v", len(c.scrollContainerDatas), sd)
+	}
+	allocs := testing.AllocsPerRun(10, func() {
+		c.ResetScrollContainers()
+		layout("A", "B")
+	})
+	if allocs != 0 {
+		t.Errorf("%v allocations", allocs)
+	}
+}
