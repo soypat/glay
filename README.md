@@ -62,6 +62,18 @@ ctx.OpenTextElement("label", textConfig)
 ctx.CloseElement()
 ```
 
+## Extensions
+
+glay adds the following to clay's API. None of them changes clay's output.
+
+- `OpenTextElement` and `Text` return the text element's ID, for use with `GetTextLines` and friends.
+- `AppendTextLineBoxes` gives the bounding boxes of a text element's wrapped lines, including lines
+  culled or empty, which have no render command.
+- `Config.MaxRenderCommandCount` and `Config.MaxWrappedTextLineCount` size the render command and
+  wrapped line arrays separately. Clay sizes both to `MaxElementCount`, which stays the default.
+- `BooleanWarnings.MaxWrappedTextLinesExceeded` reports wrapped lines dropped for lack of room,
+  for which clay reports no error.
+
 ## Differences with clay
 
 - Errors are reported through `Config.ErrorHandler` like in clay, and `EndLayout` also returns the first error of the frame.
