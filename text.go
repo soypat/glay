@@ -2,14 +2,14 @@ package glay
 
 import "math"
 
-// OpenTextElement declares a text element as a child of the open element. The text is not
-// copied and must remain unmodified until the render commands are consumed.
-// A measure text function must be set; see [Config.MeasureText].
-func (c *Context) OpenTextElement(text string, textConfig TextElementConfig) {
+// OpenTextElement declares a text element as a child of the open element and returns its ID,
+// zero if elements are exceeded. The text is not copied and must remain unmodified until the
+// render commands are consumed. A measure text function must be set; see [Config.MeasureText].
+func (c *Context) OpenTextElement(text string, textConfig TextElementConfig) ElementID {
 	c.neededElements++
 	if len(c.layoutElements) == cap(c.layoutElements)-1 || c.booleanWarnings.MaxElementsExceeded {
 		c.booleanWarnings.MaxElementsExceeded = true
-		return
+		return ElementID{}
 	}
 	parentElement := c.openLayoutElement()
 
@@ -33,6 +33,7 @@ func (c *Context) OpenTextElement(text string, textConfig TextElementConfig) {
 	textElement.minDimensions = Dimensions{Width: textMeasured.minWidth, Height: textDimensions.Height}
 	textElement.textElementData = textElementData{text: text, preferredDimensions: textMeasured.unwrappedDimensions}
 	parentElement.childrenLength++
+	return elementID
 }
 
 // ResetMeasureTextCache clears the text measurement cache, i.e. after fonts are reloaded.

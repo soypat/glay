@@ -30,6 +30,12 @@ type Config struct {
 	// MaxMeasureTextCacheWordCount is the maximum number of measured words cached.
 	// Must be at least 32 and no more than 32*MaxElementCount. Defaults to max(32, 2*MaxElementCount).
 	MaxMeasureTextCacheWordCount int
+	// MaxRenderCommandCount is the capacity of the render command array. Each wrapped line of
+	// text takes a command. Defaults to MaxElementCount, which clay always uses.
+	MaxRenderCommandCount int
+	// MaxWrappedTextLineCount is the capacity of the wrapped text line array, shared by all text
+	// elements of a layout. Defaults to MaxElementCount, which clay always uses.
+	MaxWrappedTextLineCount int
 	// MeasureText measures the dimensions of text. Required to use text elements.
 	// It must not retain text.
 	MeasureText func(text string, config *TextElementConfig, userData any) Dimensions
@@ -48,6 +54,10 @@ type BooleanWarnings struct {
 	MaxTextMeasureCacheExceeded   bool
 	TextMeasurementFunctionNotSet bool
 	HashMapCapacityExceeded       bool
+	// MaxWrappedTextLinesExceeded is set when text did not fit [Config.MaxWrappedTextLineCount].
+	// Like clay, glay then drops the lines that do not fit and sizes text elements to the lines
+	// kept. Clay reports no error for it.
+	MaxWrappedTextLinesExceeded bool
 }
 
 // Context holds all layout state. All memory is allocated in [Context.Initialize];
@@ -55,6 +65,8 @@ type BooleanWarnings struct {
 type Context struct {
 	maxElementCount               intn
 	maxMeasureTextCacheWordCount  intn
+	maxRenderCommandCount         intn
+	maxWrappedTextLineCount       intn
 	errorHandler                  ErrorHandler
 	errorHandlerUserData          any
 	booleanWarnings               BooleanWarnings
@@ -220,13 +232,18 @@ func (c *Context) Initialize(cfg Config) error {
 		maxElements = defaultMaxElementCount
 	}
 	maxWords := cfg.defaultWords(maxElements)
+	maxCommands := cfg.defaultCount(cfg.MaxRenderCommandCount, maxElements)
+	maxLines := cfg.defaultCount(cfg.MaxWrappedTextLineCount, maxElements)
 	// Clay computes the text cache bucket count as maxWords/32 and indexes a
 	// maxElements sized array with it.
-	if maxElements < 2 || maxElements > math.MaxInt32 || maxWords < 32 || maxWords/32 > maxElements {
+	if maxElements < 2 || maxElements > math.MaxInt32 || maxWords < 32 || maxWords/32 > maxElements ||
+		maxCommands < 0 || maxCommands > math.MaxInt32 || maxLines < 0 || maxLines > math.MaxInt32 {
 		return ErrInvalidConfig
 	}
 	c.maxElementCount = intn(maxElements)
 	c.maxMeasureTextCacheWordCount = intn(maxWords)
+	c.maxRenderCommandCount = intn(maxCommands)
+	c.maxWrappedTextLineCount = intn(maxLines)
 	c.errorHandler = cfg.ErrorHandler
 	c.errorHandlerUserData = cfg.ErrorHandlerUserData
 	c.measureText = cfg.MeasureText
@@ -258,6 +275,14 @@ func (cfg Config) defaultWords(maxElements int) int {
 	return max(32, 2*maxElements)
 }
 
+// defaultCount returns n, or maxElements if n is zero.
+func (cfg Config) defaultCount(n, maxElements int) int {
+	if n == 0 {
+		return maxElements
+	}
+	return n
+}
+
 // MemoryRequirements returns the number of bytes [Context.Initialize] allocates for cfg,
 // the equivalent of Clay_MinMemorySize. It does not include memory referenced by
 // strings and interfaces stored in the context.
@@ -267,13 +292,17 @@ func (cfg Config) MemoryRequirements() int {
 		maxElements = defaultMaxElementCount
 	}
 	maxWords := cfg.defaultWords(maxElements)
+	maxCommands := cfg.defaultCount(cfg.MaxRenderCommandCount, maxElements)
+	maxLines := cfg.defaultCount(cfg.MaxWrappedTextLineCount, maxElements)
 	perElement := unsafe.Sizeof(hashMapItem{}) + unsafe.Sizeof(measureTextCacheItem{}) + unsafe.Sizeof(ElementID{}) +
-		unsafe.Sizeof(layoutElement{}) + unsafe.Sizeof("") + unsafe.Sizeof(WrappedTextLine{}) +
+		unsafe.Sizeof(layoutElement{}) + unsafe.Sizeof("") +
 		unsafe.Sizeof(layoutElementTreeNode{}) + unsafe.Sizeof(layoutElementTreeRoot{}) +
-		unsafe.Sizeof(RenderCommand{}) + unsafe.Sizeof(false) +
+		unsafe.Sizeof(false) +
 		11*unsafe.Sizeof(intn(0)) // Hash map, free lists, stacks and index buffers.
 	perWord := unsafe.Sizeof(measuredWord{}) + unsafe.Sizeof(intn(0))
-	return maxElements*int(perElement) + maxWords*int(perWord) + maxScrollContainers*int(unsafe.Sizeof(scrollContainerDataInternal{}))
+	return maxElements*int(perElement) + maxWords*int(perWord) +
+		maxCommands*int(unsafe.Sizeof(RenderCommand{})) + maxLines*int(unsafe.Sizeof(WrappedTextLine{})) +
+		maxScrollContainers*int(unsafe.Sizeof(scrollContainerDataInternal{}))
 }
 
 func (c *Context) initializePersistentMemory() {
@@ -296,12 +325,12 @@ func (c *Context) initializeEphemeralMemory() {
 	alloc(&c.layoutElementChildrenBuffer, maxElements)
 	alloc(&c.layoutElements, maxElements)
 	alloc(&c.layoutElementIDStrings, maxElements)
-	alloc(&c.wrappedTextLines, maxElements)
+	alloc(&c.wrappedTextLines, c.maxWrappedTextLineCount)
 	alloc(&c.layoutElementTreeNodeArray1, maxElements)
 	alloc(&c.layoutElementTreeRoots, maxElements)
 	alloc(&c.layoutElementChildren, maxElements)
 	alloc(&c.openLayoutElementStack, maxElements)
-	alloc(&c.renderCommands, maxElements)
+	alloc(&c.renderCommands, c.maxRenderCommandCount)
 	alloc(&c.treeNodeVisited, maxElements)
 	c.treeNodeVisited = c.treeNodeVisited[:cap(c.treeNodeVisited)] // This array is accessed directly rather than behaving as a list.
 	alloc(&c.openClipElementStack, maxElements)
@@ -353,6 +382,12 @@ func (c *Context) MaxElementCount() int { return int(c.maxElementCount) }
 
 // MaxMeasureTextCacheWordCount returns the maximum number of measured words the text cache can hold.
 func (c *Context) MaxMeasureTextCacheWordCount() int { return int(c.maxMeasureTextCacheWordCount) }
+
+// MaxRenderCommandCount returns the capacity of the render command array, see [Config.MaxRenderCommandCount].
+func (c *Context) MaxRenderCommandCount() int { return int(c.maxRenderCommandCount) }
+
+// MaxWrappedTextLineCount returns the capacity of the wrapped text line array, see [Config.MaxWrappedTextLineCount].
+func (c *Context) MaxWrappedTextLineCount() int { return int(c.maxWrappedTextLineCount) }
 
 // Warnings returns the sticky warnings of the current frame.
 func (c *Context) Warnings() BooleanWarnings { return c.booleanWarnings }
@@ -457,9 +492,9 @@ func (c *Context) Clay(id ElementID, decl *ElementDeclaration, children ...func(
 	c.CloseElement()
 }
 
-// Text declares a text element as a child of the open element. Equivalent to CLAY_TEXT.
-func (c *Context) Text(text string, config TextElementConfig) {
-	c.OpenTextElement(text, config)
+// Text declares a text element as a child of the open element and returns its ID. Equivalent to CLAY_TEXT.
+func (c *Context) Text(text string, config TextElementConfig) ElementID {
+	return c.OpenTextElement(text, config)
 }
 
 func (c *Context) openLayoutElementIndex() intn {
@@ -999,6 +1034,14 @@ func (c *Context) elementIsOffscreen(bb *BoundingBox) bool {
 		bb.Y+bb.Height < 0
 }
 
+// checkWrappedLineCapacity sets the MaxWrappedTextLinesExceeded warning if no wrapped line fits.
+// Clay adds such lines unchecked, which reports an internal error.
+func (c *Context) checkWrappedLineCapacity() {
+	if len(c.wrappedTextLines) == cap(c.wrappedTextLines) {
+		c.booleanWarnings.MaxWrappedTextLinesExceeded = true
+	}
+}
+
 func (c *Context) wrappedLine(td *textElementData, i intn) *WrappedTextLine {
 	lines := c.wrappedTextLines[:cap(c.wrappedTextLines)]
 	idx := td.wrappedLinesStart + i
@@ -1031,6 +1074,7 @@ func (c *Context) calculateFinalLayout() {
 		}
 		var lineLengthChars, lineStartOffset intn
 		if !measureTextCacheItem.containsNewlines && textElementData.preferredDimensions.Width <= containerElement.dimensions.Width {
+			c.checkWrappedLineCapacity()
 			addv(c, &c.wrappedTextLines, newWrappedLine(textElementData.text, containerElement.dimensions, 0, intn(len(textElementData.text))))
 			textElementData.wrappedLinesLength++
 			continue
@@ -1040,6 +1084,7 @@ func (c *Context) calculateFinalLayout() {
 		text := textElementData.text
 		for wordIndex != -1 {
 			if len(c.wrappedTextLines) > cap(c.wrappedTextLines)-1 {
+				c.booleanWarnings.MaxWrappedTextLinesExceeded = true
 				break
 			}
 			measuredWord := get(c, c.measuredWords, wordIndex, &c.def.word)
@@ -1073,6 +1118,7 @@ func (c *Context) calculateFinalLayout() {
 			}
 		}
 		if lineLengthChars > 0 {
+			c.checkWrappedLineCapacity()
 			addv(c, &c.wrappedTextLines, newWrappedLine(text, Dimensions{Width: lineWidth - floatn(textConfig.LetterSpacing), Height: lineHeight}, lineStartOffset, lineLengthChars))
 			textElementData.wrappedLinesLength++
 		}
@@ -1529,33 +1575,49 @@ func (el *layoutElement) childOffsetPadding() Vector2 {
 	return Vector2{X: floatn(el.config.Layout.Padding.Left), Y: floatn(el.config.Layout.Padding.Top)}
 }
 
-func (c *Context) emitTextCommands(el *layoutElement, bb *BoundingBox, zIndex int16) {
-	textElementConfig := &el.textConfig
+// lineCursor positions the wrapped lines of a text element one after another, as clay does
+// when generating their render commands.
+type lineCursor struct {
+	y          floatn // Offset of the next line from the top of the text element.
+	lineHeight floatn
+}
+
+func newLineCursor(el *layoutElement) lineCursor {
 	naturalLineHeight := el.textElementData.preferredDimensions.Height
 	finalLineHeight := naturalLineHeight
-	if textElementConfig.LineHeight > 0 {
-		finalLineHeight = floatn(textElementConfig.LineHeight)
+	if el.textConfig.LineHeight > 0 {
+		finalLineHeight = floatn(el.textConfig.LineHeight)
 	}
 	lineHeightOffset := (finalLineHeight - naturalLineHeight) / 2
-	yPosition := lineHeightOffset
+	return lineCursor{y: lineHeightOffset, lineHeight: finalLineHeight}
+}
+
+// box returns the bounding box of line in text element el with bounding box bb.
+func (lc *lineCursor) box(el *layoutElement, line *WrappedTextLine, bb *BoundingBox) BoundingBox {
+	offset := bb.Width - line.Dimensions.Width
+	if el.textConfig.TextAlignment == TextAlignLeft {
+		offset = 0
+	}
+	if el.textConfig.TextAlignment == TextAlignCenter {
+		offset /= 2
+	}
+	return BoundingBox{Vector2: Vector2{X: bb.X + offset, Y: bb.Y + lc.y}, Dimensions: line.Dimensions}
+}
+
+// next moves the cursor to the next line.
+func (lc *lineCursor) next() { lc.y += lc.lineHeight }
+
+func (c *Context) emitTextCommands(el *layoutElement, bb *BoundingBox, zIndex int16) {
+	textElementConfig := &el.textConfig
+	cursor := newLineCursor(el)
 	for lineIndex := intn(0); lineIndex < el.textElementData.wrappedLinesLength; lineIndex++ {
 		wrappedLine := c.wrappedLine(&el.textElementData, lineIndex)
 		if wrappedLine.length == 0 {
-			yPosition += finalLineHeight
+			cursor.next()
 			continue
 		}
-		offset := bb.Width - wrappedLine.Dimensions.Width
-		if textElementConfig.TextAlignment == TextAlignLeft {
-			offset = 0
-		}
-		if textElementConfig.TextAlignment == TextAlignCenter {
-			offset /= 2
-		}
 		c.addRenderCommand(RenderCommand{
-			BoundingBox: BoundingBox{
-				Vector2:    Vector2{X: bb.X + offset, Y: bb.Y + yPosition},
-				Dimensions: wrappedLine.Dimensions,
-			},
+			BoundingBox: cursor.box(el, wrappedLine, bb),
 			RenderData: RenderData{
 				Text:          wrappedLine.Line,
 				TextOffset:    wrappedLine.Offset,
@@ -1570,8 +1632,8 @@ func (c *Context) emitTextCommands(el *layoutElement, bb *BoundingBox, zIndex in
 			ZIndex:      zIndex,
 			CommandType: RenderCommandTypeText,
 		})
-		yPosition += finalLineHeight
-		if !c.disableCulling && bb.Y+yPosition > c.layoutDimensions.Height {
+		cursor.next()
+		if !c.disableCulling && bb.Y+cursor.y > c.layoutDimensions.Height {
 			break
 		}
 	}
@@ -1600,6 +1662,27 @@ func (c *Context) GetTextLines(id ElementID) []WrappedTextLine {
 	td := &el.textElementData
 	start, end := int(td.wrappedLinesStart), int(td.wrappedLinesStart+td.wrappedLinesLength)
 	return c.wrappedTextLines[min(start, len(c.wrappedTextLines)):min(end, len(c.wrappedTextLines))]
+}
+
+// AppendTextLineBoxes appends to dst the bounding boxes of the wrapped lines [Context.GetTextLines]
+// returns for the text element with the given ID, in the same order, as positioned by the last
+// layout. They are the bounding boxes of the lines' render commands, but are also given for lines
+// that have no render command: culled lines and empty lines. It does not allocate if dst has room.
+func (c *Context) AppendTextLineBoxes(dst []BoundingBox, id ElementID) []BoundingBox {
+	item := c.getHashMapItem(id.ID)
+	if item == &c.def.hashItem || item.layoutElement < 0 || int(item.layoutElement) >= len(c.layoutElements) {
+		return dst
+	}
+	el := &c.layoutElements[item.layoutElement]
+	if !el.isTextElement {
+		return dst
+	}
+	cursor := newLineCursor(el)
+	for _, line := range c.GetTextLines(id) {
+		dst = append(dst, cursor.box(el, &line, &item.boundingBox))
+		cursor.next()
+	}
+	return dst
 }
 
 // GetScrollContainerData returns data on the scroll container with the given ID.
