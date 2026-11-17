@@ -1920,6 +1920,14 @@ func (c *Context) UpdateScrollContainers(enableDragScrolling bool, scrollDelta V
 	}
 }
 
+// ResetScrollContainers forgets the state kept for every scroll container, i.e. its scroll
+// position, as if none had been declared before. Call it before [Context.BeginLayout].
+// [Context.UpdateScrollContainers] discards the state of scroll containers no longer declared,
+// but like clay it skips the next container after each one it discards, keeping it one more frame.
+func (c *Context) ResetScrollContainers() {
+	c.scrollContainerDatas = c.scrollContainerDatas[:0]
+}
+
 // GetScrollOffset returns the internally stored scroll offset of the open element.
 // Generally used to set ClipElementConfig.ChildOffset of scroll containers.
 func (c *Context) GetScrollOffset() Vector2 {
