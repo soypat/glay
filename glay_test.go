@@ -47,6 +47,8 @@ func TestInitializeInvalidConfig(t *testing.T) {
 		{MaxElementCount: 1},
 		{MaxElementCount: 16, MaxMeasureTextCacheWordCount: 16},
 		{MaxElementCount: 16, MaxMeasureTextCacheWordCount: 32*16 + 32},
+		{MaxElementCount: 16, MaxRenderCommandCount: -1},
+		{MaxElementCount: 16, MaxWrappedTextLineCount: -1},
 	} {
 		if err := context.Initialize(cfg); err != ErrInvalidConfig {
 			t.Errorf("config %+v: want ErrInvalidConfig, got %v", cfg, err)
